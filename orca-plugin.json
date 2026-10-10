@@ -3,8 +3,8 @@
   "id": "gateway",
   "publisher": "wikivibe",
   "name": "WikiVibe Gateway",
-  "version": "1.0.0",
-  "description": "Подключение WikiVibe API и VAPI к совместимым агентам Orca. Настройка ключа, каталог моделей и обратимые изменения конфигурации агентов.",
+  "version": "1.0.1",
+  "description": "Подключает WikiVibe к Orca и записывает выбранную модель в нативные конфигурации поддержанных агентов после предварительного просмотра и явного согласия.",
   "engines": { "orca": ">=1.4.214" },
   "pluginApi": 1,
   "main": "main.mjs",
@@ -12,7 +12,7 @@
     "commands": [
       { "id": "configure", "title": "WikiVibe: Настроить" },
       { "id": "check", "title": "WikiVibe: Проверить подключение" },
-      { "id": "disconnect", "title": "WikiVibe: Удалить ключ плагина" }
+      { "id": "disconnect", "title": "WikiVibe: Удалить сохранённый ключ" }
     ]
   },
   "capabilities": [

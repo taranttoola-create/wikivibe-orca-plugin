@@ -10,5 +10,6 @@ for (const file of files) await cp(file, `${folder}/${file}`, { recursive: true 
 const output = `dist/${manifest.publisher}.${manifest.id}-${manifest.version}.tar.gz`;
 execFileSync('tar', ['-czf', output, ...files]);
 console.log(output);
-console.log(`Normal Orca install: Settings → Plugins → Install plugin → Local folder → ${folder}`);
-console.log('Archive is a transport artifact, not a claim that Orca supports archive import. Use a local plugin directory or publish the repository for marketplace installation.');
+console.log(`Установка папки: Settings → Plugins → Install plugin → Local folder → ${folder}`);
+console.log(`Установка из GitHub: https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v${manifest.version}`);
+console.log('Архив предназначен для переноса: распакуйте его и установите папку через Local folder. Прямой импорт архива не поддерживается.');

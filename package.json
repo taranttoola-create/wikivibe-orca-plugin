@@ -1,7 +1,11 @@
 {
   "name": "wikivibe-orca-plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
+  "description": "WikiVibe Gateway для Orca: каталог моделей и обратимая настройка нативных конфигураций семи агентов.",
+  "homepage": "https://github.com/taranttoola-create/wikivibe-orca-plugin#readme",
+  "repository": { "type": "git", "url": "https://github.com/taranttoola-create/wikivibe-orca-plugin.git" },
+  "bugs": { "url": "https://github.com/taranttoola-create/wikivibe-orca-plugin/issues" },
   "type": "module",
   "engines": { "node": ">=22" },
   "files": ["orca-plugin.json", "main.mjs", "src", "ui", "README.md"],

@@ -12,7 +12,7 @@ export function createService(host, { home, fetchImpl = fetch } = {}) {
   }
   async function key() {
     const { value } = await host.call('secrets.get', { key: 'apiKey' });
-    if (!value) throw new Error('Сначала подключите API-ключ.');
+    if (!value) throw new Error('Сначала проверьте и сохраните API-ключ.');
     return value;
   }
   async function state() {
@@ -49,7 +49,7 @@ export function createService(host, { home, fetchImpl = fetch } = {}) {
       case 'preferences': {
         const selected = endpoint(body.baseUrl);
         const catalog = await listModels(selected, await key(), { fetchImpl });
-        if (typeof body.model !== 'string' || !catalog.some(m => m.id === body.model)) throw new Error('Выберите модель из каталога выбранного endpoint.');
+        if (typeof body.model !== 'string' || !catalog.some(m => m.id === body.model)) throw new Error('Выберите модель из каталога по выбранному адресу API.');
         await save({ baseUrl: selected, model: body.model });
         models = catalog;
         modelsBase = selected;
@@ -57,16 +57,16 @@ export function createService(host, { home, fetchImpl = fetch } = {}) {
       }
       case 'preview': return previewAgents(body.agentIds, await config(), options);
       case 'apply': {
-        if (body.confirmed !== true) throw new Error('Подтвердите изменение файлов агентов и сохранение ключа в их конфигурации.');
+        if (body.confirmed !== true) throw new Error('Подтвердите изменение файлов агентов и запись API-ключа в их конфигурации открытым текстом.');
         const preferences = await config();
         if (!preferences.model) throw new Error('Сначала выберите и сохраните модель.');
         const credential = await key();
         const catalog = await listModels(preferences.baseUrl, credential, { fetchImpl });
-        if (!catalog.some(m => m.id === preferences.model)) throw new Error('Выбранная модель больше не доступна. Обновите каталог.');
+        if (!catalog.some(m => m.id === preferences.model)) throw new Error('Выбранная модель больше недоступна. Обновите список моделей.');
         return applyAgents(body.agentIds, { ...preferences, apiKey: credential }, options);
       }
       case 'restore': {
-        if (body.confirmed !== true) throw new Error('Подтвердите восстановление конфигурации.');
+        if (body.confirmed !== true) throw new Error('Подтвердите восстановление файлов агентов из резервных копий.');
         return restoreAgents(body.agentIds, options);
       }
       case 'disconnect':

@@ -2,7 +2,7 @@ export const ENDPOINTS = ['https://api.wikivibe.dev/v1', 'https://vapi.wikivibe.
 export const REGISTRATION_URL = 'https://api.wikivibe.dev/register?aff=9YAJBL6HLM23';
 
 export function endpoint(value) {
-  if (!ENDPOINTS.includes(value)) throw new Error('Выберите API или VAPI WikiVibe.');
+  if (!ENDPOINTS.includes(value)) throw new Error('Выберите один из поддерживаемых адресов API WikiVibe.');
   return value;
 }
 
@@ -23,18 +23,18 @@ export async function listModels(baseUrl, key, { fetchImpl = fetch } = {}) {
       redirect: 'error', signal: AbortSignal.timeout(15000)
     });
   } catch {
-    throw new Error('Не удалось связаться с WikiVibe за 15 секунд. Проверьте сеть и выбранный endpoint.');
+    throw new Error('Не удалось связаться с WikiVibe. Время ожидания — 15 секунд. Проверьте сеть и выбранный адрес API.');
   }
   if (!response.ok) {
     await response.body?.cancel();
-    if (response.status === 401 || response.status === 403) throw new Error('Ключ отклонён или не имеет доступа к выбранному endpoint.');
-    if (response.status === 429) throw new Error('WikiVibe ограничил запросы. Повторите позже.');
+    if (response.status === 401 || response.status === 403) throw new Error('Ключ отклонён или не имеет доступа к выбранному адресу API.');
+    if (response.status === 429) throw new Error('Достигнут лимит запросов WikiVibe. Повторите позже.');
     throw new Error(`Каталог моделей недоступен (HTTP ${response.status}).`);
   }
   // Never return arbitrary upstream content: it could reflect credentials.
   if (!response.headers.get('content-type')?.includes('application/json')) {
     await response.body?.cancel();
-    throw new Error('WikiVibe вернул не JSON-каталог моделей.');
+    throw new Error('WikiVibe вернул каталог моделей не в формате JSON.');
   }
   let size = 0;
   const chunks = [];

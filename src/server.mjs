@@ -19,7 +19,7 @@ export async function startControlServer(service, { port = 0, idleMs = 4 * 60_00
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
     response.setHeader('X-Frame-Options', 'DENY');
-    if (request.headers.host !== origin?.slice(7)) return json(response, 403, { error: 'Недопустимый host.' });
+    if (request.headers.host !== origin?.slice(7)) return json(response, 403, { error: 'Заголовок Host не соответствует адресу локальной панели.' });
     if (request.url === '/' && request.method === 'GET') {
       const nonce = randomBytes(16).toString('hex');
       response.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
@@ -27,12 +27,12 @@ export async function startControlServer(service, { port = 0, idleMs = 4 * 60_00
       response.end(template.replaceAll('__NONCE__', nonce));
       return;
     }
-    if (request.headers.origin && request.headers.origin !== origin) return json(response, 403, { error: 'Недопустимый origin.' });
+    if (request.headers.origin && request.headers.origin !== origin) return json(response, 403, { error: 'Запрос отправлен не со страницы локальной панели.' });
     if (request.headers['sec-fetch-site'] === 'cross-site') return json(response, 403, { error: 'Межсайтовый запрос запрещён.' });
     const authorization = request.headers.authorization;
     const expected = Buffer.from(`Bearer ${token}`);
     const supplied = Buffer.from(typeof authorization === 'string' ? authorization : '');
-    if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return json(response, 401, { error: 'Сессия настройки недоступна. Откройте её командой плагина в Orca.' });
+    if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return json(response, 401, { error: 'Нет доступа к панели. Откройте её командой «WikiVibe: Настроить» в Orca.' });
     let action;
     if (request.url === '/api/state' && request.method === 'GET') action = 'state';
     else if (request.method === 'POST' && request.url?.startsWith('/api/') && OPERATIONS.has(request.url.slice(5))) action = request.url.slice(5);
@@ -42,16 +42,16 @@ export async function startControlServer(service, { port = 0, idleMs = 4 * 60_00
     try {
       let body = {};
       if (request.method === 'POST') {
-        if (!request.headers['content-type']?.startsWith('application/json')) return json(response, 415, { error: 'Требуется JSON.' });
+        if (!request.headers['content-type']?.startsWith('application/json')) return json(response, 415, { error: 'Запрос должен содержать JSON с Content-Type: application/json.' });
         let size = 0;
         const chunks = [];
         for await (const chunk of request) {
           size += chunk.length;
-          if (size > 16384) return json(response, 413, { error: 'Слишком большой запрос.' });
+          if (size > 16384) return json(response, 413, { error: 'Размер запроса превышает 16 КиБ.' });
           chunks.push(chunk);
         }
         try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-        catch { return json(response, 400, { error: 'Некорректный JSON.' }); }
+        catch { return json(response, 400, { error: 'Не удалось прочитать JSON запроса.' }); }
       }
       const value = await service.request(action, body);
       json(response, 200, value);

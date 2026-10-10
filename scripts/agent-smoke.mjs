@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { applyAgents, restoreAgents } from '../src/adapters.mjs';
 
 const [binary, agent = 'opencode'] = process.argv.slice(2);
-if (!binary || !['opencode', 'omp'].includes(agent)) throw new Error('Supply installed OpenCode/OMP binary and optional agent ID.');
+if (!binary || !['opencode', 'omp'].includes(agent)) throw new Error('Укажите путь к установленному OpenCode/OMP и при необходимости ID агента.');
 const home = await mkdtemp(join(tmpdir(), 'wikivibe-agent-'));
 try {
   await applyAgents([agent], { apiKey: 'smoke-fixture-credential', baseUrl: 'https://api.wikivibe.dev/v1', model: 'wikivibe-smoke-model' }, { home });
@@ -24,6 +24,6 @@ try {
     assert.equal(resolved.providers.wikivibe.settings.apiKey, 'smoke-fixture-credential');
     assert.equal(resolved.providers.wikivibe.package, 'aisdk:@ai-sdk/openai-compatible');
   }
-  console.log(`Installed ${agent} consumed native WikiVibe provider config in temporary HOME. Inference not requested.`);
+  console.log(`Установленный ${agent} прочитал конфигурацию WikiVibe во временном HOME. Запрос к модели не выполнялся.`);
   await restoreAgents([agent], { home });
 } finally { await rm(home, { recursive: true, force: true }); }

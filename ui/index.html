@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="dark">
-  <title>Wikivibe · Подключение агентов</title>
+  <title>WikiVibe Gateway · Настройка агентов</title>
   <style nonce="__NONCE__">
     :root { color-scheme: dark; --bg: #0c121d; --panel: #131d2b; --raised: #192536; --border: #29374a; --text: #edf3f8; --muted: #a7b6c9; --accent: #75e2c5; --error: #ffb5b5; --warning: #f3d395; }
     * { box-sizing: border-box; }
@@ -94,26 +94,26 @@
 <body>
   <div class="shell">
     <header>
-      <div class="brand"><div class="mark" aria-hidden="true">w</div><div><div class="brand-name">Wikivibe</div><div class="brand-caption">Подключение к вашим AI-агентам</div></div></div>
+      <div class="brand"><div class="mark" aria-hidden="true">w</div><div><div class="brand-name">WikiVibe Gateway</div><div class="brand-caption">Плагин для Orca</div></div></div>
       <div id="connection-badge" class="badge"><span class="dot" aria-hidden="true"></span><span id="connection-label">Загрузка…</span></div>
     </header>
     <main id="main" aria-busy="true">
       <section class="intro" aria-labelledby="title">
         <div class="eyebrow">Локальная панель Orca</div>
-        <h1 id="title">Один ключ. Ваши инструменты.</h1>
-        <p class="muted">Подключите Wikivibe, выберите модель и настройте совместимых агентов. Изменения в их файлах применяются только с вашего согласия.</p>
+        <h1 id="title">Настройка WikiVibe для агентов</h1>
+        <p class="muted">Сохраните API-ключ WikiVibe, выберите модель и настройте поддерживаемые файлы агентов. Плагин изменит эти файлы только с вашего согласия.</p>
       </section>
-      <div id="message" class="message" role="status" aria-live="polite" aria-atomic="true"><p id="message-text">Загружаем настройки…</p><button id="retry" type="button" hidden>Повторить загрузку</button></div>
+      <div id="message" class="message" role="status" aria-live="polite" aria-atomic="true"><p id="message-text">Загружаются настройки…</p><button id="retry" type="button" hidden>Повторить загрузку</button></div>
       <div class="layout">
         <div class="stack">
           <section class="card" aria-labelledby="account-title">
-            <div class="card-heading"><span class="step" aria-hidden="true">01</span><h2 id="account-title">Подключение</h2></div>
-            <p class="muted">Нет аккаунта? <a id="registration" href="https://api.wikivibe.dev/register?aff=9YAJBL6HLM23" target="_blank" rel="noopener noreferrer">Зарегистрироваться в Wikivibe ↗</a></p>
+            <div class="card-heading"><span class="step" aria-hidden="true">01</span><h2 id="account-title">API-ключ WikiVibe</h2></div>
+            <p class="muted">Нет аккаунта? <a id="registration" href="https://api.wikivibe.dev/register?aff=9YAJBL6HLM23" target="_blank" rel="noopener noreferrer">Зарегистрироваться в WikiVibe</a></p>
             <form id="connect-form">
               <fieldset id="connect-fields" disabled>
                 <div class="field"><label for="connect-endpoint">Адрес API</label><select id="connect-endpoint"><option value="https://api.wikivibe.dev/v1">api.wikivibe.dev/v1</option><option value="https://vapi.wikivibe.dev/v1">vapi.wikivibe.dev/v1</option></select></div>
-                <div class="field"><label for="api-key">API-ключ</label><input id="api-key" type="password" name="api-key" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Вставьте ключ из личного кабинета" required aria-describedby="key-help"><p id="key-help" class="help">Ключ не отображается в панели. После проверки он сохраняется в защищённом хранилище Orca.</p></div>
-                <div class="actions"><button id="connect" class="primary" type="submit">Проверить и сохранить ключ</button><button id="disconnect" class="danger" type="button" hidden>Отключить</button></div>
+                <div class="field"><label for="api-key">API-ключ</label><input id="api-key" type="password" name="api-key" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Вставьте ключ из личного кабинета" required aria-describedby="key-help"><p id="key-help" class="help">Ввод скрыт. После проверки плагин сохраняет ключ в зашифрованном хранилище Orca, отдельно от файлов агентов.</p></div>
+                <div class="actions"><button id="connect" class="primary" type="submit">Проверить и сохранить ключ</button><button id="disconnect" class="danger" type="button" hidden>Удалить сохранённый ключ</button></div>
               </fieldset>
             </form>
             <div class="divider"></div>
@@ -121,25 +121,25 @@
           </section>
           <section class="card" aria-labelledby="model-title">
             <div class="card-heading"><span class="step" aria-hidden="true">02</span><h2 id="model-title">Модель и адрес API</h2></div>
-            <p class="muted">Выберите модель из списка вашего аккаунта. Настройки ниже используются при следующем применении к агентам.</p>
+            <p class="muted">Выберите модель из каталога вашего аккаунта. Эти настройки плагин использует при следующем применении к агентам.</p>
             <form id="preferences-form">
               <fieldset id="preferences-fields" disabled>
                 <div class="field"><label for="base-url">Адрес API для агентов</label><select id="base-url" aria-describedby="endpoint-help"><option value="https://api.wikivibe.dev/v1">api.wikivibe.dev/v1</option><option value="https://vapi.wikivibe.dev/v1">vapi.wikivibe.dev/v1</option></select><p id="endpoint-help" class="help">При смене адреса заново загрузите модели, затем сохраните настройки.</p></div>
-                <div class="field"><label for="model">Модель</label><select id="model" aria-describedby="model-help"><option value="">Сначала подключите аккаунт</option></select><p id="model-help" class="help">Список предоставляется выбранным API. Проверка ключа и получение моделей не подтверждают успешный запрос к модели или совместимость с протоколом конкретного агента.</p></div>
+                <div class="field"><label for="model">Модель</label><select id="model" aria-describedby="model-help"><option value="">Сначала сохраните API-ключ</option></select><p id="model-help" class="help">Каталог возвращает выбранный API. Проверка ключа и загрузка каталога не подтверждают, что запрос к модели пройдёт или что она поддерживает протокол выбранного агента.</p></div>
                 <div class="actions"><button id="refresh-models" type="button">Обновить модели</button><button id="save-preferences" class="primary" type="submit">Сохранить настройки</button></div>
               </fieldset>
             </form>
-            <p id="preferences-hint" class="help">Подключите аккаунт, чтобы получить доступные модели.</p>
+            <p id="preferences-hint" class="help">Проверьте и сохраните API-ключ, чтобы загрузить доступные модели.</p>
           </section>
         </div>
         <section class="card" aria-labelledby="agents-title">
-          <div class="card-heading"><span class="step" aria-hidden="true">03</span><h2 id="agents-title">Совместимые агенты</h2></div>
-          <p class="muted">Выберите инструменты и сначала посмотрите, какие файлы будут изменены. Доступность означает поддержку конфигурации, а не проверку установки агента. Ни один агент не выбран заранее.</p>
-          <div class="notice"><p><strong>Важно: ключ в конфигурации агента.</strong> В отличие от хранилища Orca, нативный файл агента может содержать API-ключ в открытом виде. Не публикуйте его и не добавляйте в репозиторий.</p></div>
+          <div class="card-heading"><span class="step" aria-hidden="true">03</span><h2 id="agents-title">Настройка агентов</h2></div>
+          <p class="muted">Выберите агентов и посмотрите, какие файлы изменит плагин. Доступная карточка означает поддержку формата конфигурации, а не проверку установки агента или совместимости модели. Заранее никто не выбран.</p>
+          <div class="notice"><p><strong>API-ключ в открытом виде.</strong> Хранилище Orca зашифровано, но при применении плагин запишет ключ открытым текстом в указанные файлы агентов. Не публикуйте эти файлы и не добавляйте их в репозиторий. Резервные копии тоже могут содержать прежние ключи и другие секреты.</p></div>
           <fieldset id="agent-fields" disabled aria-label="Выбор агентов">
-            <div id="agent-list" class="agent-list"><p class="muted">Загружаем совместимые агенты…</p></div>
+            <div id="agent-list" class="agent-list"><p class="muted">Загружается список агентов…</p></div>
             <p id="selection-count" class="selection">Ничего не выбрано</p>
-            <div class="actions"><button id="preview-button" type="button">Посмотреть изменения</button><button id="restore-button" type="button">Восстановить из копий</button></div>
+            <div class="actions"><button id="preview-button" type="button">Посмотреть изменения</button><button id="restore-button" type="button">Восстановить из резервных копий</button></div>
             <div id="preview" class="preview" hidden>
               <h3>Предварительный просмотр</h3>
               <p id="preview-settings" class="help"></p>
@@ -150,11 +150,11 @@
             </div>
           </fieldset>
           <div id="result" class="preview" role="status" aria-live="polite" hidden><h3 id="result-title"></h3><ul id="result-items" class="change-list"></ul><ul id="result-warnings" class="warnings" hidden></ul></div>
-          <p class="help">Восстановление использует резервные копии плагина. Если файл после применения менялся вручную, безопасное восстановление может быть отклонено.</p>
+          <p class="help">Для восстановления нужны резервные копии плагина. Если файл изменился после применения, плагин откажется его перезаписывать. Каждый файл изменяется отдельно: общей транзакции для всех файлов нет.</p>
         </section>
       </div>
-      <footer class="footnote"><p><strong>Изменения действуют для новых сессий.</strong> Перезапустите выбранный агент после применения или восстановления. Уже запущенные сессии не переключаются автоматически.</p><p>Панель работает только с поддерживаемыми нативными конфигурациями. Закрытые агенты и инструменты без совместимого формата не подключаются. Отключение Wikivibe удаляет ключ из Orca, но не восстанавливает файлы агентов.</p></footer>
-      <p class="help">Страница закрывает локальный сервер после четырёх минут бездействия. Orca также может остановить worker плагина через пять минут после команды, даже при работе со страницей. Если связь пропала, снова выполните «WikiVibe: Настроить». После перезагрузки вкладки также требуется открыть настройку заново.</p>
+      <footer class="footnote"><p><strong>Настройки действуют для новых сессий.</strong> Перезапустите выбранный агент после применения или восстановления. Уже запущенные сессии не переключаются автоматически.</p><p>Плагин меняет только стандартные файлы в локальном домашнем каталоге. Настройки проекта, переменные окружения, параметры запуска, управляемые настройки и профиль Orca могут переопределить их. SSH и WSL не настраиваются. JSONC, сложные YAML/TOML и закрытые форматы не изменяются.</p><p>Удаление сохранённого ключа затрагивает только защищённое хранилище плагина в Orca. Файлы агентов и записанный в них ключ останутся на диске. Чтобы отменить изменения, используйте восстановление из резервных копий.</p><p><a href="https://github.com/taranttoola-create/wikivibe-orca-plugin" target="_blank" rel="noopener noreferrer">Репозиторий и сообщения об ошибках</a> · <a href="https://github.com/taranttoola-create/wikivibe-orca-plugin/blob/v1.0.1/README.md" target="_blank" rel="noopener noreferrer">Инструкция и ограничения</a></p></footer>
+      <p class="help">Локальный сервер закрывается после четырёх минут бездействия. Orca также может остановить процесс плагина через пять минут после команды, даже если вы работаете со страницей. Если связь пропала, снова выполните «WikiVibe: Настроить». После перезагрузки вкладки панель тоже нужно открыть этой командой заново.</p>
     </main>
   </div>
   <dialog id="confirmation" aria-labelledby="confirmation-title" aria-describedby="confirmation-description">
@@ -213,9 +213,9 @@
         $('main').setAttribute('aria-busy', String(busy));
         if (!state) return;
         $('connection-badge').className = 'badge' + (state.connected ? ' connected' : '');
-        $('connection-label').textContent = state.connected ? 'Ключ сохранён' : 'Не подключено';
-        if (!state.connected) $('preferences-hint').textContent = 'Подключите аккаунт, чтобы получить доступные модели. Восстановление из копий доступно и без ключа.';
-        else if (modelsBase !== $('base-url').value) $('preferences-hint').textContent = 'Адрес изменён. Обновите список моделей перед сохранением.';
+        $('connection-label').textContent = state.connected ? 'Ключ сохранён' : 'Нет сохранённого ключа';
+        if (!state.connected) $('preferences-hint').textContent = 'Проверьте и сохраните API-ключ, чтобы загрузить доступные модели. Восстановление из резервных копий доступно и без ключа.';
+        else if (modelsBase !== $('base-url').value) $('preferences-hint').textContent = 'Адрес API изменён. Обновите список моделей перед сохранением.';
         else if (preferencesDirty()) $('preferences-hint').textContent = 'Есть несохранённые настройки. Сохраните их перед просмотром и применением.';
         else if (!state.model) $('preferences-hint').textContent = 'Выберите модель и сохраните настройки перед применением к агентам.';
         else $('preferences-hint').textContent = 'Настройки сохранены. Уже настроенные файлы агентов изменятся только после нового применения.';
@@ -258,7 +258,7 @@
         if (!state.agents.length) {
           const empty = document.createElement('p');
           empty.className = 'muted';
-          empty.textContent = 'Поддерживаемые конфигурации не найдены.';
+          empty.textContent = 'Нет агентов с поддерживаемым форматом конфигурации.';
           list.append(empty);
         }
         for (const agent of state.agents) {
@@ -297,7 +297,7 @@
         $('connect-endpoint').value = next.baseUrl;
         $('base-url').value = next.baseUrl;
         modelOptions(next.connected ? next.models : [], next.model);
-        if (!next.connected) $('model').firstElementChild.textContent = 'Сначала подключите аккаунт';
+        if (!next.connected) $('model').firstElementChild.textContent = 'Сначала сохраните API-ключ';
         $('api-key').value = '';
         invalidatePreview();
         renderAgents();
@@ -315,9 +315,9 @@
         });
         let data;
         try { data = await response.json(); }
-        catch { throw new Error('Локальная панель вернула некорректный ответ. Откройте её заново через Orca.'); }
+        catch { throw new Error('Локальная панель вернула некорректный ответ. Откройте её заново командой «WikiVibe: Настроить» в Orca.'); }
         if (!response.ok) {
-          if (response.status === 401 || response.status === 403) throw new Error('Доступ к панели истёк или отклонён. Откройте панель заново через Orca.');
+          if (response.status === 401 || response.status === 403) throw new Error('Доступ к панели истёк или отклонён. Откройте её заново командой «WikiVibe: Настроить» в Orca.');
           throw new Error(typeof data.error === 'string' ? data.error : 'Не удалось выполнить запрос к локальной панели.');
         }
         return data;
@@ -331,7 +331,7 @@
         try { await operation(); }
         catch (error) {
           // A connect failure must never reproduce a submitted credential, even if a server error includes it.
-          const text = connect ? 'Не удалось проверить и сохранить ключ. Проверьте ключ, выбранный адрес API и доступность сети. Ключ не был показан в ответе; повторите ввод для новой попытки.' : error instanceof TypeError ? 'Нет связи с локальной панелью. Проверьте, что плагин запущен в Orca, и попробуйте снова.' : error.message || 'Не удалось выполнить действие.';
+          const text = connect ? 'Не удалось проверить и сохранить ключ. Проверьте ключ, выбранный адрес API и сеть. Из соображений безопасности ответ не содержит ключа. Введите его заново для повторной попытки.' : error instanceof TypeError ? 'Нет связи с локальной панелью. Откройте её заново командой «WikiVibe: Настроить» в Orca.' : error.message || 'Не удалось выполнить действие.';
           message(text, 'error', retry);
         } finally {
           busy = false;
@@ -368,9 +368,9 @@
       }
 
       async function load() {
-        await perform('Загружаем настройки…', async () => {
+        await perform('Загружаются настройки…', async () => {
           renderState(await api('/api/state'));
-          message('Панель готова. Выберите подключение, модель и нужных агентов.');
+          message('Панель готова. Сохраните API-ключ, выберите модель и нужных агентов.');
         }, { retry: true });
       }
 
@@ -385,10 +385,10 @@
         $('api-key').value = '';
         invalidatePreview();
         hideResult();
-        perform('Проверяем доступ к API и сохраняем ключ…', async () => {
+        perform('Проверяется доступ к API и сохраняется ключ…', async () => {
           try { renderState(await api('/api/connect', { apiKey: key, baseUrl })); }
           finally { key = ''; }
-          message('Ключ проверен и сохранён. API предоставил список моделей; совместимость конкретной модели с протоколом агента этим не подтверждается.', 'success');
+          message('Ключ проверен и сохранён в зашифрованном хранилище Orca. API вернул каталог моделей. Запрос к модели и совместимость с протоколом агента не проверялись.', 'success');
         }, { connect: true });
       });
 
@@ -406,7 +406,7 @@
         const chosen = $('model').value;
         invalidatePreview();
         hideResult();
-        perform('Получаем модели выбранного API…', async () => {
+        perform('Загружается каталог моделей по выбранному адресу API…', async () => {
           const data = await api('/api/models', { baseUrl });
           modelsBase = baseUrl;
           modelOptions(data.models, chosen);
@@ -420,9 +420,9 @@
         const model = $('model').value;
         invalidatePreview();
         hideResult();
-        perform('Сохраняем адрес API и модель…', async () => {
+        perform('Сохраняются адрес API и модель…', async () => {
           renderState(await api('/api/preferences', { baseUrl, model }));
-          message('Настройки сохранены. Для изменения файлов агентов сначала посмотрите изменения, затем подтвердите применение.', 'success');
+          message('Настройки сохранены. Чтобы изменить файлы агентов, посмотрите изменения и подтвердите применение.', 'success');
         });
       });
 
@@ -430,7 +430,7 @@
         const agentIds = ids();
         invalidatePreview();
         hideResult();
-        perform('Подготавливаем предварительный просмотр…', async () => {
+        perform('Подготавливается предварительный просмотр…', async () => {
           const data = await api('/api/preview', { agentIds });
           $('changes').replaceChildren();
           for (const change of data.changes) {
@@ -453,10 +453,10 @@
             $('changes').append(row);
           }
           warnings($('preview-warnings'), data.warnings);
-          $('preview-settings').textContent = 'Модель: ' + state.model + ' · API: ' + state.baseUrl;
+          $('preview-settings').textContent = 'Модель: ' + state.model + ' · Адрес API: ' + state.baseUrl;
           previewIds = data.changes.length ? agentIds : null;
           $('preview').hidden = false;
-          message(data.changes.length ? 'Предварительный просмотр готов. Файлы пока не изменены. Для применения требуется явное согласие ниже.' : 'Изменений нет. Выберите другие поддерживаемые агенты.');
+          message(data.changes.length ? 'Предварительный просмотр готов. Файлы пока не изменены. Для применения подтвердите запись ключа и изменения ниже.' : 'Изменений нет. Выберите других агентов с поддерживаемым форматом конфигурации.');
         });
       });
       $('consent').addEventListener('change', updateControls);
@@ -465,10 +465,10 @@
         const agentIds = previewIds.slice();
         invalidatePreview();
         hideResult();
-        perform('Применяем настройки к выбранным агентам…', async () => {
+        perform('Применяются настройки к выбранным агентам…', async () => {
           const data = await api('/api/apply', { agentIds, confirmed: true });
           result('Результат применения', data.applied, data.warnings);
-          message('Обработка завершена. Проверьте результат и предупреждения ниже. Для использования настроек запустите новые сессии агентов.', 'success');
+          message('Обработка завершена. Проверьте результат и предупреждения ниже. Чтобы использовать настройки, запустите новые сессии агентов.', 'success');
         });
       });
 
@@ -477,10 +477,10 @@
         const agentIds = kind === 'restore' ? ids() : [];
         if (kind === 'restore' && !agentIds.length) return;
         confirmation = { kind, agentIds };
-        $('confirmation-title').textContent = kind === 'restore' ? 'Восстановить выбранные конфигурации?' : 'Отключить Wikivibe?';
-        $('confirmation-description').textContent = kind === 'restore' ? 'Плагин восстановит файлы выбранных агентов из своих резервных копий. Изменённые вручную файлы не будут перезаписаны. Новые сессии будут использовать восстановленные настройки.' : 'Ключ будет удалён из защищённого хранилища Orca. Файлы агентов НЕ будут восстановлены: записанный в них ключ останется на диске. Сначала восстановите конфигурации, если хотите убрать эти изменения.';
+        $('confirmation-title').textContent = kind === 'restore' ? 'Восстановить выбранные конфигурации?' : 'Удалить сохранённый ключ?';
+        $('confirmation-description').textContent = kind === 'restore' ? 'Плагин восстановит файлы выбранных агентов из своих резервных копий. Файлы, изменённые после применения, не будут перезаписаны. Каждый файл восстанавливается отдельно; общей транзакции нет. Новые сессии будут использовать восстановленные настройки.' : 'Ключ будет удалён только из защищённого хранилища плагина в Orca. Файлы агентов не изменятся: записанный в них ключ останется на диске. Удаление не отзывает ключ в WikiVibe и не отключает агентов. Чтобы отменить изменения файлов, используйте восстановление из резервных копий.';
         $('confirmation-targets').textContent = kind === 'restore' ? state.agents.filter((agent) => agentIds.includes(agent.id)).map((agent) => agent.label).join(', ') : '';
-        $('confirm-action').textContent = kind === 'restore' ? 'Подтверждаю восстановление' : 'Отключить без восстановления';
+        $('confirm-action').textContent = kind === 'restore' ? 'Подтверждаю восстановление' : 'Удалить сохранённый ключ';
         $('confirmation').showModal();
       }
       $('restore-button').addEventListener('click', () => ask('restore'));
@@ -495,15 +495,15 @@
         invalidatePreview();
         hideResult();
         if (action.kind === 'restore') {
-          perform('Восстанавливаем конфигурации из резервных копий…', async () => {
+          perform('Восстанавливаются конфигурации из резервных копий…', async () => {
             const data = await api('/api/restore', { agentIds: action.agentIds, confirmed: true });
             result('Восстановленные файлы', data.restored, data.warnings);
             message(data.restored.length ? 'Восстановление завершено. Запустите новые сессии выбранных агентов.' : 'Файлы не восстановлены. Доступных резервных копий для выбранных агентов нет.', data.restored.length ? 'success' : 'info');
           });
         } else {
-          perform('Удаляем ключ из хранилища Orca…', async () => {
+          perform('Удаляется сохранённый ключ из хранилища плагина в Orca…', async () => {
             renderState(await api('/api/disconnect', {}));
-            message('Wikivibe отключён. Ключ удалён из Orca, но файлы агентов не изменились. При необходимости выберите агентов и восстановите их из копий.', 'success');
+            message('Сохранённый ключ удалён из хранилища плагина в Orca. Файлы агентов не изменились; записанный в них ключ остаётся на диске. Чтобы отменить изменения, выберите агентов и восстановите файлы из резервных копий. Ключ в WikiVibe не отозван.', 'success');
           });
         }
       });
@@ -511,7 +511,7 @@
       if (!token) {
         $('main').setAttribute('aria-busy', 'false');
         $('connection-label').textContent = 'Нет доступа';
-        message('Нет токена доступа. Откройте эту панель через плагин Wikivibe в Orca. Токен не сохраняется, поэтому после перезагрузки вкладки панель нужно открыть заново.', 'error');
+        message('Нет токена доступа к панели. Откройте её командой «WikiVibe: Настроить» в Orca. Токен не сохраняется, поэтому после перезагрузки вкладки панель нужно открыть заново.', 'error');
       } else {
         load();
       }

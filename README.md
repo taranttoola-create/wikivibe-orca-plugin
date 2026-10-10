@@ -1,62 +1,129 @@
 # WikiVibe Gateway для Orca
 
-Самостоятельный плагин `wikivibe.gateway`: регистрация WikiVibe, API-ключ, каталог моделей и обратимая настройка семи совместимых CLI. Без форка Orca, отдельного helper и production-зависимостей. Требуется Orca с experimental plugin API 1; manifest допускает версии от 1.4.214, парсер и IPC worker проверены на 1.4.223.
+WikiVibe Gateway — самостоятельный плагин Orca для подключения WikiVibe и настройки поддерживаемых CLI-агентов. Он проверяет API-ключ, загружает каталог моделей и после предварительного просмотра и вашего согласия записывает выбранную модель и ключ в нативные конфигурации агентов. Форк Orca и отдельный helper не нужны. Идентификатор плагина: `wikivibe.gateway`.
 
-## Обычная установка
+## Установка
 
-1. В Orca откройте **Settings → Plugins**, включите **Plugin system**.
-2. Выберите **Install plugin → Local folder** и укажите абсолютный путь к папке этого проекта с `orca-plugin.json`. Это обычная установка: Orca копирует плагин в своё хранилище. Не нужно добавлять Development path или менять внутренние файлы Orca.
-3. Проверьте разрешения и включите **WikiVibe Gateway**. До согласия код не запускается.
-4. Выполните команду **WikiVibe: Настроить** через палитру команд Orca. Откроется локальная страница в браузере по умолчанию.
+В **Settings → Plugins → Install plugin → Git URL** укажите адрес версии 1.0.1:
 
-Для переноса готовых файлов разработчик может выполнить `npm run package:plugin`: в `dist/` появятся самостоятельная папка плагина и `.tar.gz`. Установите папку через Local folder; архив сначала распакуйте. Node/npm нужны для разработки и упаковки, не для установки готовой папки: worker использует runtime Orca.
+```text
+https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.0.1
+```
 
-Репозиторий: https://github.com/taranttoola-create/wikivibe-orca-plugin. Для обычной установки через **Install plugin → Git URL** используйте `https://github.com/taranttoola-create/wikivibe-orca-plugin.git#62bbb3c52f63cf2604b9a5cab6d65e915465a50d` — фиксированный commit плагина. Требуется полный 40-символьный SHA: короткий SHA Orca трактует как имя ветки/тега, и загрузка завершается ошибкой. Публикация в marketplace пока не выполнена. Чтобы подготовить marketplace index, выполните `node scripts/marketplace.mjs https://github.com/taranttoola-create/wikivibe-orca-plugin.git 62bbb3c52f63cf2604b9a5cab6d65e915465a50d` и сохраните результат как `orca-marketplace.json` в своём marketplace-репозитории.
+1. Откройте **Settings → Plugins** и включите **Plugin system**.
+2. Выберите **Install plugin → Git URL**, вставьте адрес выше и установите плагин.
+3. Проверьте запрошенные разрешения: `secrets`, `storage`, `notifications:show`. Дайте согласие и включите **WikiVibe Gateway**. До согласия код плагина не запускается.
+4. В палитре команд Orca выполните **WikiVibe: Настроить**. Панель настройки откроется в браузере по умолчанию.
 
-## Подключение
+Нужна Orca с экспериментальным plugin API 1. В manifest указана минимальная версия 1.4.214; парсер manifest и IPC worker проверены на Orca 1.4.223. Установка через Settings остаётся отдельной проверкой, её успешное прохождение здесь не заявлено.
 
-1. **Зарегистрироваться** открывает https://api.wikivibe.dev/register?aff=9YAJBL6HLM23.
-2. Введите ключ и выберите `https://api.wikivibe.dev/v1` или `https://vapi.wikivibe.dev/v1`.
-3. Плагин проверяет `GET /models` с Bearer authentication, затем сохраняет ключ в зашифрованном vault Orca. При отказе API прежний ключ не заменяется.
-4. Выберите модель из каталога и сохраните настройки. При смене endpoint обновите каталог.
-5. Выберите агентов, откройте **Посмотреть изменения**, прочитайте пути и предупреждения. Для применения явно согласитесь на plaintext ключ в нативных файлах.
-6. Запустите **новую** сессию агента в Orca. Проверьте выбранный provider/model и отправьте короткий запрос. Наличие модели в каталоге не гарантирует streaming, tool calls или поддержку протокола агента.
+Репозиторий: [taranttoola-create/wikivibe-orca-plugin](https://github.com/taranttoola-create/wikivibe-orca-plugin). [Исходники версии 1.0.1](https://github.com/taranttoola-create/wikivibe-orca-plugin/tree/v1.0.1).
 
-Дополнительные команды: **WikiVibe: Проверить подключение** обновляет каталог; **WikiVibe: Удалить ключ плагина** удаляет только vault key, не конфигурации агентов.
+### Установка из локальной папки
 
-## Агенты и границы
+Вместо Git URL можно выбрать **Install plugin → Local folder** и указать абсолютный путь к папке версии 1.0.1 с файлом `orca-plugin.json`. Orca скопирует её в своё хранилище. Добавлять **Development path** или менять внутренние файлы Orca не нужно.
 
-| Агент | Нативная конфигурация в домашнем каталоге | Протокол |
+Готовую папку и архив создаёт `npm run package:plugin`. Для Local folder используйте `dist/wikivibe.gateway-1.0.1/`; архив `dist/wikivibe.gateway-1.0.1.tar.gz` сначала распакуйте. Архив служит для передачи файлов, а не для прямого импорта в Orca. Node.js и npm нужны для разработки и упаковки, но не для установки готовой папки: worker использует runtime Orca.
+
+## Подключение и выбор модели
+
+1. Если аккаунта ещё нет, нажмите ссылку регистрации в панели: [зарегистрироваться в WikiVibe](https://api.wikivibe.dev/register?aff=9YAJBL6HLM23).
+2. В разделе подключения выберите **Адрес API**: `https://api.wikivibe.dev/v1` или `https://vapi.wikivibe.dev/v1`. Введите **API-ключ** и нажмите **Проверить и сохранить ключ**.
+3. Плагин выполнит `GET /models` с Bearer authentication. Только после успешной проверки он сохранит ключ в зашифрованном хранилище Orca. Если API отклонит запрос, прежний ключ не заменится. Сохранённый ключ не возвращается в браузер.
+4. В разделе **Модель и адрес API** выберите модель из каталога и нажмите **Сохранить настройки**. При смене адреса сначала нажмите **Обновить модели**, затем сохраните настройки.
+5. Выберите агентов и нажмите **Посмотреть изменения**. Проверьте пути файлов и предупреждения. Пока вы не разрешили запись ключа открытым текстом и не нажали **Применить к выбранным агентам**, файлы не меняются.
+6. Запустите новую сессию выбранного агента в Orca. Проверьте provider и модель, затем отправьте короткий запрос. Уже запущенные сессии не переключаются автоматически.
+
+Сохранение новой модели, адреса API или ключа само по себе не обновляет ранее настроенные файлы агентов. Для этого повторите просмотр и применение.
+
+Команда **WikiVibe: Проверить подключение** проверяет доступ к каталогу и обновляет список моделей. Успешный ответ `/models` не подтверждает генерацию ответа, streaming, tool calls или совместимость выбранной модели с протоколом агента.
+
+## Поддерживаемые агенты
+
+Все пути в таблице относятся к домашнему каталогу локального пользователя. Наличие агента в панели означает наличие адаптера конфигурации, а не обнаружение установленного CLI.
+
+| Агент | Нативные файлы и настройки | Протокол |
 | --- | --- | --- |
-| Claude Code | `.claude/settings.json`, `env.ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, модель | Anthropic Messages; base URL без `/v1` |
-| Codex | `.codex/config.toml`, `model_provider`, `[model_providers.wikivibe]` | OpenAI Responses; `experimental_bearer_token` зависит от версии CLI |
-| OpenCode | `.config/opencode/opencode.json`, custom provider `@ai-sdk/openai-compatible` | OpenAI Chat Completions |
-| Pi | `.pi/agent/models.json` и `settings.json` | OpenAI Chat Completions |
-| oh-my-pi | `.omp/agent/models.yml`/`.yaml`, `config.yml`/`.yaml`, `modelRoles.default` | OpenAI Chat Completions |
-| Aider | `.aider.conf.yml`, `openai-api-base`, `openai-api-key`, модель с routing prefix `openai/` | OpenAI Chat Completions |
-| Qwen Code | `.qwen/settings.json`, `modelProviders.openai`, `env`, startup auth | OpenAI Chat Completions |
+| Claude Code | `.claude/settings.json`: `env.ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, модель | Anthropic Messages; base URL записывается без `/v1` |
+| Codex | `.codex/config.toml`: `model_provider`, `[model_providers.wikivibe]` | OpenAI Responses; поддержка `experimental_bearer_token` зависит от версии CLI |
+| OpenCode | `.config/opencode/opencode.json`: provider `wikivibe` с `@ai-sdk/openai-compatible` | OpenAI Chat Completions |
+| Pi | `.pi/agent/models.json`, `.pi/agent/settings.json` | OpenAI Chat Completions |
+| oh-my-pi | `.omp/agent/models.yml` или `.yaml`, `.omp/agent/config.yml` или `.yaml`: `modelRoles.default` | OpenAI Chat Completions |
+| Aider | `.aider.conf.yml`: `openai-api-base`, `openai-api-key`, модель с префиксом `openai/` | OpenAI Chat Completions |
+| Qwen Code | `.qwen/settings.json`: `modelProviders.openai`, `env`, выбранный тип аутентификации и модель | OpenAI Chat Completions |
 
-Доступность в UI означает наличие адаптера, **не** обнаружение установленного CLI. Каждый формат основан на документации соответствующего агента; реальные CLI-версии могут отличаться. Подтверждено чтение нативной конфигурации установленными OpenCode и OMP в изолированном HOME. Остальные адаптеры проверены behavioral tests, не реальным запуском CLI.
+Адаптеры основаны на документации агентов, но формат и поведение конкретной версии CLI могут отличаться. Чтение нативной конфигурации подтверждено установленными OpenCode и oh-my-pi в изолированном домашнем каталоге. Для остальных адаптеров проверены изменения файлов в тестах, а не реальный запуск CLI. Успешная генерация ответа агентами через плагин не подтверждена.
 
-Обрабатываются только **default local home paths**. Пользовательские профили Orca, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `XDG_CONFIG_HOME`, настройки проекта, env, managed settings и CLI flags могут переопределить их. SSH/WSL и remote agent home не настраиваются. Плагин не меняет настройки запуска Orca и не регистрирует новые harnesses через неподключённый `contributes.agents`.
+Плагин работает только со стандартными путями локального домашнего каталога. Профили Orca, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `XDG_CONFIG_HOME`, конфигурации проекта, переменные окружения, managed settings и флаги CLI могут их переопределить. Настройки SSH/WSL и домашние каталоги удалённых агентов не меняются. Плагин не меняет параметры запуска Orca и не регистрирует новые harnesses через `contributes.agents`.
 
-Cursor, Windsurf, Antigravity, Gemini и другие агенты без реализованного здесь нативного адаптера не подключаются автоматически. JSONC, anchors/tags/merge YAML и сложный TOML не переписываются; конфликтующие credentials/providers отклоняются. Существующий provider `wikivibe`, созданный не этим плагином, не перезаписывается.
+Cursor, Windsurf, Antigravity, Gemini и другие агенты без реализованного нативного адаптера автоматически не настраиваются. Поддержка файла конфигурации также не означает, что любая модель WikiVibe работает с соответствующим протоколом.
 
-## Секреты и восстановление
+## Ключи, резервные копии и удаление настроек
 
-- Собственный ключ хранится через `secrets` Orca с OS-backed encryption; plaintext fallback отсутствует. Модель/endpoint — через `storage`.
-- У CLI ключ остаётся **открытым текстом** после явного согласия. Config и backup files получают `0600`, backup directory — `0700` на POSIX. Windows mode bits не заменяют NTFS ACL; держите профиль пользователя закрытым другим пользователям.
-- Backup record находится рядом с файлом в `.wikivibe-gateway-backups/`. Он может содержать старые credentials: не публикуйте и не добавляйте в Git.
-- **Восстановить из копий** возвращает исходные байты/права или удаляет только созданный плагином config. При последующих пользовательских изменениях восстановление запрещено: сохраните свои изменения и сравните с backup вручную.
-- Применение выполняется по файлам, не общей транзакцией. При сбое часть файлов может быть уже изменена; восстановите выбранные конфигурации. Pending/restoring records позволяют безопасно завершить восстановление.
-- После аварии может остаться `~/.wikivibe-gateway.lock`. Не удаляйте его, пока worker/операция живы. После полного отключения плагина можно удалить stale lock вручную и восстановить конфигурации.
-- **Отключить** удаляет только ключ из vault. Сначала восстановите агенты, если хотите убрать ключ из их файлов; удаление плагина также не восстанавливает их автоматически. Для полной ревокации отзовите ключ в WikiVibe.
+Ключ плагина хранится через API `secrets` Orca с шифрованием средствами ОС. Варианта хранения этого ключа открытым текстом нет. Адрес API и выбранная модель сохраняются через `storage`.
 
-Worker — доверенный Node-процесс с доступом к filesystem/network; перечисленные capabilities ограничивают host API, а не являются OS sandbox. Разрешения: `secrets`, `storage`, `notifications:show`.
+В конфигурациях CLI ключ, напротив, записывается **открытым текстом**, только после явного согласия. Не публикуйте эти файлы и не добавляйте их в Git. На POSIX конфигурации и резервные копии получают права `0600`, каталог копий — `0700`. В Windows mode bits не заменяют NTFS ACL: доступ к профилю пользователя нужно ограничивать средствами ОС.
 
-Локальная страница слушает только `127.0.0.1`, требует случайный token из fragment и Authorization, проверяет Host/Origin, ограничивает JSON body, запрещает iframe и внешние assets через CSP. Token не хранится в cookies/localStorage и удаляется из адреса. После reload откройте настройку заново. Локальный сервер закрывается после четырёх минут бездействия; Orca может остановить worker через пять минут после команды, даже при активности страницы. Не пересылайте URL настройки.
+Резервные копии и записи восстановления находятся рядом с конфигурацией в `.wikivibe-gateway-backups/`. Копии могут содержать прежние секреты. Их тоже нельзя публиковать.
 
-## Проверка разработчиком
+Чтобы отменить настройки, выберите нужных агентов, нажмите **Восстановить из резервных копий** и подтвердите действие. Плагин вернёт исходные байты и права файла либо удалит конфигурацию, которую создал сам. Если после применения файл меняли вручную, восстановление будет отклонено: сохраните свои изменения и сравните файл с копией вручную. Восстановление доступно и без сохранённого ключа. После него запустите новую сессию агента.
+
+Применение и восстановление выполняются по файлам, а не одной общей транзакцией. При сбое часть файлов уже может быть изменена. Проверьте результат операции и восстановите выбранные конфигурации; записи незавершённых операций позволяют безопасно завершить восстановление.
+
+Команда **WikiVibe: Удалить сохранённый ключ** и кнопка удаления ключа в панели удаляют только ключ из хранилища Orca. Конфигурации агентов не меняются, работающие сессии не отключаются. Если хотите убрать ключ из файлов агентов, сначала восстановите их из копий. Удаление самого плагина тоже не восстанавливает файлы автоматически. Чтобы отозвать ключ полностью, отзовите его в WikiVibe.
+
+### Доступ плагина и локальная страница
+
+Worker — доверенный Node-процесс с доступом к файловой системе и сети. Разрешения `secrets`, `storage`, `notifications:show` ограничивают host API Orca, но не создают изолированную среду ОС.
+
+Панель слушает только `127.0.0.1`. Она требует случайный token из URL fragment и заголовка Authorization, проверяет Host/Origin, ограничивает размер JSON-запросов и запрещает iframe и внешние ресурсы через CSP. Token не хранится в cookies или localStorage и удаляется из адреса страницы. Не пересылайте URL настройки.
+
+После перезагрузки вкладки нужно снова выполнить **WikiVibe: Настроить**. Локальный сервер закрывается после четырёх минут бездействия. Orca также может остановить worker через пять минут после команды, даже при активной работе со страницей.
+
+## Если что-то не работает
+
+### Git URL не устанавливается
+
+Используйте закреплённую версию:
+
+```text
+https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.0.1
+```
+
+Orca принимает тег или полный 40-символьный SHA commit. Короткий SHA трактуется как имя ветки или тега и может привести к ошибке загрузки. Проверьте доступность репозитория и тега `v1.0.1`; не заменяйте тег сокращённым commit. Загрузка и checkout по полному SHA проверены отдельно от установки через Settings.
+
+### Панель потеряла связь или требует открыть её заново
+
+Повторно выполните **WikiVibe: Настроить** в Orca. Перезагрузка страницы не восстанавливает token. Закрытие сервера после бездействия и остановка worker по его сроку жизни не означают, что сохранённый ключ или конфигурации агентов удалены.
+
+### Ключ не сохраняется или каталог пуст
+
+Проверьте ключ, выбранный адрес API и доступность сети. Для подключения доступны только два адреса, перечисленные выше. Если API не вернул моделей, применить конфигурацию нельзя до выбора модели. После смены адреса обновите каталог и сохраните настройки.
+
+### Плагин отказался менять конфигурацию
+
+Отказ защищает существующую конфигурацию от неоднозначного изменения. Поддерживаются корректный JSON без комментариев, простой YAML и ограниченный формат TOML. В частности:
+
+- JSONC не переписывается. Если у OpenCode уже есть `opencode.jsonc`, автоматическое изменение исключено.
+- YAML с anchors, aliases, tags, merge keys, несколькими документами или табуляцией не меняется. Inline mapping в изменяемом участке тоже может вызвать отказ.
+- Сложный TOML, в том числе многострочные строки и неоднозначные ключи provider, автоматически не переписывается.
+- Если у oh-my-pi одновременно есть `.yml` и `.yaml` для одного файла, устраните неоднозначность вручную. Старый `.omp/agent/models.json` плагин не мигрирует в YAML.
+- Чужой provider `wikivibe`, конфликтующие credentials или routing не перезаписываются. В OpenCode ограничения `enabled_providers`/`disabled_providers`, в Pi `enabledModels`, а в Qwen существующий ID модели могут препятствовать применению.
+- Символические и жёсткие ссылки, чужой владелец файла или небезопасные права каталога вызывают отказ. API-ключ должен быть буквальным значением, а не командой или ссылкой на переменную.
+
+Сверьте конфигурацию с документацией своей версии CLI и предупреждением панели. Для неподдерживаемого формата настройте агент вручную, не рассчитывая на автоматическое применение и восстановление плагином.
+
+### Агент использует прежнюю модель
+
+Сначала убедитесь, что после сохранения настроек вы применили их к агенту и запустили новую сессию. Затем проверьте профиль Orca, переменные окружения, настройки проекта и флаги CLI: они могут перекрывать файлы из таблицы. Ошибка запроса к модели требует отдельной проверки её протокола; наличие модели в каталоге недостаточно.
+
+### После аварии осталась блокировка
+
+Файл `~/.wikivibe-gateway.lock` защищает операции с конфигурациями. Не удаляйте его, пока worker или операция ещё работают. После полного отключения плагина можно вручную удалить оставшуюся блокировку и восстановить конфигурации.
+
+## Разработка и проверки
+
+Для разработки нужен Node.js 22 или новее. Production-зависимостей нет. Команды выполняются из корня исходников версии 1.0.1:
 
 ```sh
 npm test
@@ -69,17 +136,29 @@ node scripts/worker-smoke.mjs /absolute/path/to/Orca /absolute/path/to/app.asar/
 npm run package:plugin
 ```
 
-Tests/smoke используют temporary HOME и не меняют реальные конфигурации. `--fixture` — только проверочный каталог, не production fallback. `npm run smoke` проверяет отказ реального API неверному ключу. Worker smoke использует настоящий installed Orca IPC worker с изолированным host storage, но не заменяет проверку установки через UI.
+Тесты конфигураций и smoke используют временный домашний каталог, не реальные конфигурации пользователя. `--fixture` предоставляет только проверочный каталог, не подмену API в рабочем плагине. `npm run smoke` проверяет отказ реального API неверному ключу. Agent smoke проверяет чтение конфигурации установленным CLI. Worker smoke запускает настоящий IPC worker установленной Orca с изолированным хранилищем, но не заменяет установку через Settings.
 
-Проверено: manifest принят installed Orca; IPC activation/commands/host calls/shutdown; 20 behavioral tests; localhost HTTP и browser workflow connect → preferences → preview → consent → apply → restore → endpoint switch → disconnect; reload без token; mobile DOM без горизонтального overflow. PNG screenshot сохранён при smoke; автоматический визуальный анализ изображения был недоступен. Успешный запрос реальной модели не проверен: действительный пользовательский ключ не предоставлен. Установка в Settings UI не проверена: `orca skills get orca-cli` завершился таймаутом 30 секунд. Эти ограничения не скрыты за fixture.
+Проверены 20 поведенческих тестов, localhost HTTP и браузерный сценарий подключения, сохранения настроек, просмотра, согласия, применения, восстановления, смены адреса и удаления ключа. Также проверены перезагрузка без token и отсутствие горизонтального переполнения мобильного DOM. Эти проверки не подтверждают успешный запрос модели из агента или установку через Settings.
+
+### Упаковка и marketplace
+
+`npm run package:plugin` создаёт самостоятельную папку и `.tar.gz` в `dist/`. Обычная установка готовой версии использует Git URL `https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.0.1` либо распакованную локальную папку.
+
+Для подготовки marketplace index выполните:
+
+```sh
+node scripts/marketplace.mjs https://github.com/taranttoola-create/wikivibe-orca-plugin.git v1.0.1
+```
+
+Сохраните JSON из stdout как `orca-marketplace.json` в своём marketplace-репозитории. Скрипт принимает URL и тег раздельно: в индексе `source.url` будет `https://github.com/taranttoola-create/wikivibe-orca-plugin.git`, а `source.ref` — `v1.0.1`. Это та же закреплённая версия, что и Git URL установки выше. Генерация индекса сама по себе не публикует плагин; публикация в marketplace здесь не заявлена.
 
 ## Первичные источники
 
-- [Orca Settings → Plugins](https://www.onorca.dev/docs/settings#plugins-experimental), [Install plugin UI](https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/PluginInstallDialog.tsx), [пример worker](https://github.com/stablyai/orca/tree/main/examples/plugins/hello-orca).
-- [Claude gateway](https://code.claude.com/docs/en/llm-gateway-connect).
-- [Codex config reference](https://developers.openai.com/codex/config-reference).
-- [OpenCode config](https://opencode.ai/docs/config/), [providers](https://opencode.ai/docs/providers/).
-- [Pi model configuration](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/models.md).
-- [OMP models](https://github.com/can1357/oh-my-pi/blob/main/docs/models.md).
-- [Aider OpenAI-compatible endpoints](https://aider.chat/docs/llms/openai-compat.html), [config](https://aider.chat/docs/config/aider_conf.html).
-- [Qwen authentication/configuration](https://qwenlm.github.io/qwen-code-docs/en/users/configuration/auth/).
+- [Orca Settings → Plugins](https://www.onorca.dev/docs/settings#plugins-experimental), [интерфейс установки плагина](https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/PluginInstallDialog.tsx), [пример worker](https://github.com/stablyai/orca/tree/main/examples/plugins/hello-orca).
+- [Claude Code: подключение gateway](https://code.claude.com/docs/en/llm-gateway-connect).
+- [Codex: справочник конфигурации](https://developers.openai.com/codex/config-reference).
+- [OpenCode: конфигурация](https://opencode.ai/docs/config/), [providers](https://opencode.ai/docs/providers/).
+- [Pi: конфигурация моделей](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md).
+- [oh-my-pi: модели](https://github.com/can1357/oh-my-pi/blob/main/docs/models.md).
+- [Aider: OpenAI-compatible endpoints](https://aider.chat/docs/llms/openai-compat.html), [конфигурация](https://aider.chat/docs/config/aider_conf.html).
+- [Qwen Code: аутентификация и конфигурация](https://qwenlm.github.io/qwen-code-docs/en/users/configuration/auth/).

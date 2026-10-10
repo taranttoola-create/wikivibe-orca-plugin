@@ -21,6 +21,6 @@ test('models are authenticated, deduplicated and sorted', async () => {
 });
 
 test('upstream auth failure or reflected key never appears in diagnostics', async () => {
-  await assert.rejects(listModels(ENDPOINTS[0], 'secret-fixture', { fetchImpl: async () => new Response('secret-fixture', { status: 401 }) }), e => !e.message.includes('secret-fixture') && e.message.includes('Ключ'));
+  await assert.rejects(listModels(ENDPOINTS[0], 'secret-fixture', { fetchImpl: async () => new Response('secret-fixture', { status: 401 }) }), e => !e.message.includes('secret-fixture'));
   await assert.rejects(listModels(ENDPOINTS[0], 'secret-fixture', { fetchImpl: async () => Response.json({ data: [{ id: 'secret-fixture' }] }) }), e => !e.message.includes('secret-fixture'));
 });

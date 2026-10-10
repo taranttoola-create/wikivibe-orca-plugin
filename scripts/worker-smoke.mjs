@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 // Uses the installed Orca IPC worker, not a replacement plugin runtime.
 const [executable, entry] = process.argv.slice(2);
-if (!executable || !entry) throw new Error('Supply installed Orca Electron executable and plugin-host-entry path.');
+if (!executable || !entry) throw new Error('Укажите исполняемый файл установленной Orca и путь к plugin-host-entry.');
 const home = await mkdtemp(join(tmpdir(), 'wikivibe-worker-'));
 const child = fork(entry, [], { execPath: executable, env: { PATH: process.env.PATH, HOME: home, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
 const timeout = setTimeout(() => child.kill(), 20000);
@@ -36,7 +36,7 @@ try {
   const exited = new Promise(resolveExit => child.once('exit', resolveExit));
   child.send({ type: 'shutdown' });
   assert.equal(await exited, 0);
-  console.log('Installed Orca IPC worker: activation, registered commands, host calls, disconnect and shutdown passed. Host persistence isolated; no installation claimed.');
+  console.log('IPC worker установленной Orca: активация, команды, обращения к host API, удаление ключа и завершение проверены. Хранилище изолировано; установка через Settings не проверяется.');
 } finally {
   clearTimeout(timeout);
   child.kill();

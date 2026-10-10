@@ -37,7 +37,7 @@ if (process.argv.includes('--serve')) {
       const result = await post('connect', { apiKey: 'invalid-smoke-credential', baseUrl: 'https://api.wikivibe.dev/v1' });
       assert.equal(result.status, 400);
       assert.equal(secrets.size, 0);
-      console.log('Real WikiVibe invalid-key rejection; vault remains empty.');
+      console.log('Реальный API WikiVibe отклонил неверный ключ; хранилище осталось пустым.');
     } else {
       assert.equal((await post('connect', { apiKey: 'fixture-credential', baseUrl: 'https://api.wikivibe.dev/v1' })).value.connected, true);
       assert.equal((await post('preferences', { baseUrl: 'https://api.wikivibe.dev/v1', model: 'fixture-model' })).status, 200);
@@ -47,7 +47,7 @@ if (process.argv.includes('--serve')) {
       assert.equal((await post('apply', { agentIds: ['opencode'], confirmed: true })).status, 200);
       assert.equal((await post('restore', { agentIds: ['opencode'], confirmed: true })).status, 200);
       assert.equal((await post('disconnect', {})).value.connected, false);
-      console.log('Isolated fixture: connect → preferences → preview → consent → apply → restore → disconnect.');
+      console.log('Изолированный сценарий: ключ → настройки → просмотр → согласие → применение → восстановление → удаление ключа.');
     }
   } finally { await cleanup(); }
 }

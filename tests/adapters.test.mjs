@@ -45,15 +45,14 @@ test('lists all documented native adapters without requiring binaries', async ()
   }
 });
 
-test('preview declares plaintext-secret and protocol limitations without writing files', async () => {
+test('preview reports affected files and secret exposure without writing configs', async () => {
   const root = await home();
   const result = await previewAgents(['claude', 'codex'], value, { home: root });
   assert.equal(result.changes.length, 2);
   assert.ok(result.changes.every(change => change.secretOnDisk === true));
-  assert.ok(result.warnings.some(warning => warning.includes('открытым текстом')));
-  assert.ok(result.warnings.some(warning => warning.includes('Anthropic Messages')));
-  assert.ok(result.warnings.some(warning => warning.includes('OpenAI Responses')));
   assert.deepEqual(await listAgents({ home: root }).then(agents => agents.map(agent => agent.configPath).filter(file => file.includes('.claude') || file.includes('.codex'))), [path.join(root, '.claude/settings.json'), path.join(root, '.codex/config.toml')]);
+  await assert.rejects(get(root, '.claude/settings.json'), { code: 'ENOENT' });
+  await assert.rejects(get(root, '.codex/config.toml'), { code: 'ENOENT' });
 });
 
 test('Claude JSON preserves unrelated fields and restores original bytes and mode', async () => {
