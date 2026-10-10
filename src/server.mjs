@@ -32,7 +32,7 @@ export async function startControlServer(service, { port = 0, idleMs = 4 * 60_00
     const authorization = request.headers.authorization;
     const expected = Buffer.from(`Bearer ${token}`);
     const supplied = Buffer.from(typeof authorization === 'string' ? authorization : '');
-    if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return json(response, 401, { error: 'Нет доступа к панели. Откройте её командой «WikiVibe: Настроить» в Orca.' });
+    if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return json(response, 401, { error: 'Нет доступа к панели. Откройте её командой «WikiVibe: Открыть защищённую настройку» в Orca.' });
     let action;
     if (request.url === '/api/state' && request.method === 'GET') action = 'state';
     else if (request.method === 'POST' && request.url?.startsWith('/api/') && OPERATIONS.has(request.url.slice(5))) action = request.url.slice(5);

@@ -11,7 +11,7 @@ async function openBrowser(url) {
     else if (process.platform === 'win32') await execute('rundll32.exe', ['url.dll,FileProtocolHandler', url], { timeout: 5000 });
     else await execute('xdg-open', [url], { timeout: 5000 });
   } catch {
-    throw new Error('Не удалось открыть браузер. Проверьте браузер по умолчанию и снова выполните «WikiVibe: Настроить».');
+    throw new Error('Не удалось открыть браузер. Проверьте браузер по умолчанию и снова выполните «WikiVibe: Открыть защищённую настройку».');
   }
 }
 

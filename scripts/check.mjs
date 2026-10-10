@@ -6,9 +6,10 @@ import { Script } from 'node:vm';
 
 const manifest = JSON.parse(await readFile('orca-plugin.json', 'utf8'));
 if (manifest.manifestVersion !== 1 || manifest.pluginApi !== 1 || !manifest.main) throw new Error('Некорректный manifest плагина Orca');
-for (const file of [manifest.main, 'src/client.mjs', 'src/server.mjs', 'src/service.mjs', 'src/adapters.mjs']) {
+for (const file of [manifest.main, 'panel.html', 'src/client.mjs', 'src/server.mjs', 'src/service.mjs', 'src/adapters.mjs']) {
   if (!(await stat(file)).isFile()) throw new Error(`Отсутствует файл плагина: ${file}`);
 }
+if (!manifest.contributes?.panels?.some((panel) => panel.id === 'settings' && panel.entry === 'panel.html')) throw new Error('Не объявлена видимая панель WikiVibe');
 const checks = [];
 const execute = promisify(execFile);
 for (const dir of ['.', 'src', 'scripts', 'tests']) {
@@ -19,4 +20,6 @@ for (const dir of ['.', 'src', 'scripts', 'tests']) {
 await Promise.all(checks);
 const html = await readFile('ui/index.html', 'utf8');
 for (const match of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) new Script(match[1]);
+const panel = await readFile('panel.html', 'utf8');
+for (const match of panel.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) new Script(match[1]);
 console.log(`Синтаксис и файлы плагина проверены: ${manifest.publisher}.${manifest.id} ${manifest.version}`);

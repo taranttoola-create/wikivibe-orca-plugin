@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; color: var(--foreground, #edf3f8); background: var(--background, #0c121d); font: 13px/1.5 system-ui, -apple-system, sans-serif; }
+    h1 { margin: 0 0 6px; font-size: 17px; }
+    h2 { margin: 20px 0 7px; font-size: 13px; }
+    p { margin: 0 0 10px; color: var(--muted-foreground, #a7b6c9); }
+    .lead { color: var(--foreground, #edf3f8); }
+    .step { padding: 11px 12px; margin: 9px 0; border: 1px solid var(--border, #29374a); border-radius: 8px; }
+    .number { color: var(--primary, #75e2c5); font-weight: 700; margin-right: 5px; }
+    code { display: block; padding: 9px; overflow-wrap: anywhere; user-select: text; color: var(--foreground, #edf3f8); background: var(--muted, #192536); border-radius: 6px; font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .note { padding: 10px 11px; border-left: 3px solid var(--primary, #75e2c5); background: var(--card, #131d2b); }
+    .warning { border-left-color: var(--destructive, #ff8f8f); }
+    strong { color: var(--foreground, #edf3f8); }
+    button { width: 100%; margin-top: 7px; padding: 9px 10px; border: 1px solid var(--border, #29374a); border-radius: 7px; color: var(--foreground, #edf3f8); background: var(--secondary, #192536); font: inherit; cursor: pointer; }
+    button:hover { background: var(--accent, #233249); }
+    #status { min-height: 18px; margin-top: 8px; color: var(--muted-foreground, #a7b6c9); }
+  </style>
+</head>
+<body>
+  <h1>WikiVibe Gateway</h1>
+  <p class="lead">Подключите WikiVibe к уже установленным агентам Orca.</p>
+
+  <div class="step"><span class="number">1.</span><strong>Нет аккаунта?</strong><p>Скопируйте адрес регистрации и откройте его в браузере:</p><code>https://api.wikivibe.dev/register?aff=9YAJBL6HLM23</code></div>
+  <div class="step"><span class="number">2.</span><strong>Есть API-ключ?</strong><p>Для безопасного ввода ключа откройте защищённую страницу настройки командой:</p><p><strong>WikiVibe: Открыть защищённую настройку</strong></p><button id="help" type="button">Показать, где вводится ключ</button><p id="status" role="status" aria-live="polite"></p></div>
+  <div class="step"><span class="number">3.</span><strong>Настройте агента</strong><p>На странице настройки выберите модель и агента, сначала просмотрите изменения, затем отдельно подтвердите запись.</p></div>
+
+  <h2>Важно</h2>
+  <p class="note warning">WikiVibe — API-провайдер, а не отдельный агент. Плагин не добавляет фиктивного агента в список Orca.</p>
+  <p class="note">Ключ хранится в защищённом хранилище Orca. В конфигурацию выбранного агента он попадёт только после явного согласия и будет записан открытым текстом.</p>
+
+  <script>
+    'use strict';
+    document.getElementById('help').addEventListener('click', function () {
+      var status = document.getElementById('status');
+      status.textContent = 'В палитре команд Orca: WikiVibe: Открыть защищённую настройку. В открывшейся странице поле API-ключа находится в блоке «API-ключ WikiVibe».';
+      window.parent.postMessage({ type: 'orca-panel-action', requestId: 'wikivibe-help-' + Date.now(), action: 'notifications.show', params: { title: 'WikiVibe Gateway', body: 'Откройте WikiVibe: Открыть защищённую настройку. Ключ вводится в локальной защищённой панели.' } }, '*');
+    });
+  </script>
+</body>
+</html>

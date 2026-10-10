@@ -1,7 +1,7 @@
 import { cp, mkdir, readFile, stat } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 const manifest = JSON.parse(await readFile('orca-plugin.json', 'utf8'));
-const files = ['orca-plugin.json', 'main.mjs', 'src', 'ui', 'README.md'];
+const files = ['orca-plugin.json', 'main.mjs', 'src', 'ui', 'panel.html', 'README.md'];
 for (const file of files) await stat(file);
 await mkdir('dist', { recursive: true });
 const folder = `dist/${manifest.publisher}.${manifest.id}-${manifest.version}`;
@@ -12,4 +12,4 @@ execFileSync('tar', ['-czf', output, ...files]);
 console.log(output);
 console.log(`Установка папки: Settings → Plugins → Install plugin → Local folder → ${folder}`);
 console.log(`Установка из GitHub: https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v${manifest.version}`);
-console.log('Архив предназначен для переноса: распакуйте его и установите папку через Local folder. Прямой импорт архива не поддерживается.');
+console.log('Архив предназначен для переноса: распакуйте его и установите папку через Local folder. Прямой импорт архива не поддерживается. После включения откройте панель WikiVibe в правой панели Orca.');
