@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { REGISTRATION_URL } from './src/client.mjs';
 import { createService } from './src/service.mjs';
+import { startControlServer } from './src/server.mjs';
 
 let control;
 const execute = promisify(execFile);
@@ -11,7 +12,7 @@ async function openBrowser(url) {
     else if (process.platform === 'win32') await execute('rundll32.exe', ['url.dll,FileProtocolHandler', url], { timeout: 5000 });
     else await execute('xdg-open', [url], { timeout: 5000 });
   } catch {
-    throw new Error('Не удалось открыть браузер. Проверьте браузер по умолчанию и снова выполните «WikiVibe: Открыть защищённую настройку».');
+    throw new Error('Не удалось открыть браузер. Проверьте браузер по умолчанию и повторите команду WikiVibe.');
   }
 }
 

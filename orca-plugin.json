@@ -3,7 +3,7 @@
   "id": "gateway",
   "publisher": "wikivibe",
   "name": "WikiVibe Gateway",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Видимая панель WikiVibe в Orca: регистрация, защищённое подключение API-ключа и настройка моделей для поддержанных агентов.",
   "engines": { "orca": ">=1.4.214" },
   "pluginApi": 1,

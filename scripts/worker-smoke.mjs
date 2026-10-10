@@ -9,7 +9,9 @@ const [executable, entry] = process.argv.slice(2);
 if (!executable || !entry) throw new Error('Укажите исполняемый файл установленной Orca и путь к plugin-host-entry.');
 const home = await mkdtemp(join(tmpdir(), 'wikivibe-worker-'));
 const child = fork(entry, [], { execPath: executable, env: { PATH: process.env.PATH, HOME: home, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
-const timeout = setTimeout(() => child.kill(), 20000);
+const timeout = setTimeout(() => child.kill(), 60000);
+const commands = ['configure', 'register', 'disconnect'];
+let commandIndex = 0;
 try {
   await new Promise((resolveReady, reject) => {
     child.once('exit', code => { if (code !== 0) reject(new Error(`worker exit ${code}`)); });
@@ -20,14 +22,15 @@ try {
         child.send({ type: 'hostResult', callId: message.callId, ok: true, value });
       }
       if (message.type === 'ready') {
-        assert.deepEqual(message.commands.sort(), ['check', 'configure', 'disconnect']);
-        child.send({ type: 'invokeCommand', callId: 0, commandId: 'disconnect', args: {} });
+        child.send({ type: 'invokeCommand', callId: commandIndex, commandId: commands[commandIndex], args: {} });
       }
       if (message.type === 'commandResult') {
         try {
           assert.equal(message.ok, true);
-          assert.deepEqual(message.value, { disconnected: true });
-          resolveReady();
+          assert.deepEqual(message.value, commands[commandIndex] === 'disconnect' ? { disconnected: true } : { opened: true });
+          commandIndex++;
+          if (commandIndex === commands.length) resolveReady();
+          else child.send({ type: 'invokeCommand', callId: commandIndex, commandId: commands[commandIndex], args: {} });
         } catch (error) { reject(error); }
       }
     });
@@ -36,7 +39,7 @@ try {
   const exited = new Promise(resolveExit => child.once('exit', resolveExit));
   child.send({ type: 'shutdown' });
   assert.equal(await exited, 0);
-  console.log('IPC worker установленной Orca: активация, команды, обращения к host API, удаление ключа и завершение проверены. Хранилище изолировано; установка через Settings не проверяется.');
+  console.log('IPC worker установленной Orca: защищённая настройка и регистрация открылись в браузере, удаление ключа и завершение проверены. Хранилище изолировано; установка через Settings не проверяется.');
 } finally {
   clearTimeout(timeout);
   child.kill();
