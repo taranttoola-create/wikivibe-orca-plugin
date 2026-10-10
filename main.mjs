@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { REGISTRATION_URL } from './src/client.mjs';
 import { createService } from './src/service.mjs';
-import { startControlServer } from './src/server.mjs';
 
 let control;
 const execute = promisify(execFile);
@@ -18,6 +18,11 @@ async function openBrowser(url) {
 export default function activate(orca) {
   const service = createService(orca.host);
   let opening = Promise.resolve();
+  orca.commands.register('register', async () => {
+    await openBrowser(REGISTRATION_URL);
+    await orca.host.call('notifications.show', { title: 'WikiVibe', body: 'Страница регистрации WikiVibe открыта в браузере.' });
+    return { opened: true };
+  });
   orca.commands.register('configure', () => {
     const next = opening.then(async () => {
       if (!control || control.closed) control = await startControlServer(service);
