@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="dark">
+  <title>Wikivibe · Подключение агентов</title>
+  <style nonce="__NONCE__">
+    :root { color-scheme: dark; --bg: #0c121d; --panel: #131d2b; --raised: #192536; --border: #29374a; --text: #edf3f8; --muted: #a7b6c9; --accent: #75e2c5; --error: #ffb5b5; --warning: #f3d395; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, input, select { font: inherit; }
+    button, a, input, select { -webkit-tap-highlight-color: transparent; }
+    a { color: var(--accent); text-underline-offset: 4px; }
+    button, input, select { border: 1px solid var(--border); border-radius: 9px; }
+    button { min-height: 44px; padding: 10px 16px; background: var(--raised); color: var(--text); cursor: pointer; font-weight: 600; }
+    button:hover:not(:disabled) { background: #233249; border-color: #51667f; }
+    button.primary { background: var(--accent); color: #10231f; border-color: var(--accent); }
+    button.primary:hover:not(:disabled) { background: #a1efdb; }
+    button.danger { color: var(--error); }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+    input:not([type="checkbox"]), select { width: 100%; min-height: 46px; padding: 10px 12px; background: #0e1724; color: var(--text); }
+    input::placeholder { color: #75869e; }
+    input[type="checkbox"] { flex: 0 0 auto; width: 19px; height: 19px; margin: 3px 0 0; accent-color: var(--accent); }
+    select:disabled, input:disabled { opacity: .6; }
+    fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+    legend { padding: 0; }
+    [hidden] { display: none !important; }
+    .shell { width: min(1100px, calc(100% - 48px)); margin: 0 auto; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 30px 0; border-bottom: 1px solid var(--border); }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .mark { display: grid; place-items: center; width: 43px; height: 43px; border-radius: 12px; background: var(--accent); color: #10231f; font-size: 24px; font-weight: 800; }
+    .brand-name { font-size: 20px; font-weight: 750; letter-spacing: -.5px; }
+    .brand-caption { color: var(--muted); font-size: 12px; }
+    .badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 11px; border: 1px solid var(--border); border-radius: 30px; color: var(--muted); font-size: 12px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #75869e; }
+    .badge.connected { color: var(--accent); border-color: #31594f; }
+    .connected .dot { background: var(--accent); }
+    main { padding: 38px 0 48px; }
+    .intro { margin-bottom: 26px; }
+    .eyebrow { color: var(--accent); font-size: 11px; font-weight: 750; letter-spacing: 1.7px; text-transform: uppercase; }
+    h1 { margin: 9px 0 12px; font-size: clamp(27px, 4vw, 37px); line-height: 1.2; letter-spacing: -1px; }
+    h2 { font-size: 19px; line-height: 1.4; margin: 0; letter-spacing: -.3px; }
+    h3 { font-size: 15px; margin: 0 0 9px; }
+    p { margin: 0 0 13px; }
+    .muted, .help { color: var(--muted); }
+    .help { font-size: 12px; margin: 7px 0 0; }
+    .intro p { max-width: 710px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.13fr); gap: 22px; align-items: start; }
+    .stack { display: grid; gap: 22px; }
+    .card { padding: 24px; background: var(--panel); border: 1px solid var(--border); border-radius: 15px; }
+    .card-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 17px; }
+    .step { display: grid; place-items: center; width: 29px; height: 29px; flex-shrink: 0; background: var(--raised); border: 1px solid var(--border); border-radius: 8px; color: var(--accent); font-size: 12px; font-weight: 700; }
+    .field { margin-bottom: 17px; }
+    .field > label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 650; }
+    .actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+    .divider { border-top: 1px solid var(--border); margin: 20px 0; }
+    .notice { padding: 12px 14px; border: 1px solid #4b4434; border-radius: 9px; background: #24231f; color: var(--warning); font-size: 13px; }
+    .notice p:last-child { margin-bottom: 0; }
+    .safe { padding: 12px 14px; border-radius: 9px; border: 1px solid #2b4844; background: #122c2a; color: #b5e6db; font-size: 13px; }
+    .message { padding: 14px 17px; border-radius: 10px; border: 1px solid var(--border); background: var(--raised); margin-bottom: 22px; overflow-wrap: anywhere; }
+    .message.error { color: var(--error); border-color: #614042; background: #2a1d27; }
+    .message.success { color: #b5e6db; border-color: #2b4844; background: #122c2a; }
+    .message > p { margin: 0; }
+    #retry { margin-top: 12px; }
+    .agent-list { display: grid; gap: 9px; margin: 16px 0; }
+    .agent { display: flex; align-items: flex-start; gap: 12px; padding: 13px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+    .agent:has(input:checked) { background: #17312f; border-color: #39766a; }
+    .agent.unavailable { opacity: .65; }
+    .agent-body { min-width: 0; }
+    .agent-title { display: block; font-weight: 650; font-size: 14px; }
+    .agent-description { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .path { display: block; color: var(--muted); font: 11px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; margin-top: 4px; }
+    .selection { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+    .preview { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
+    .change-list { list-style: none; padding: 0; margin: 0 0 15px; }
+    .change-list li { padding: 10px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; font-size: 13px; }
+    .secret-note { display: block; color: var(--warning); font-size: 12px; margin-top: 4px; }
+    .warnings { padding-left: 20px; color: var(--warning); font-size: 13px; }
+    .consent { display: flex; align-items: flex-start; gap: 11px; margin: 16px 0; font-size: 13px; cursor: pointer; }
+    .footnote { border-top: 1px solid var(--border); padding-top: 23px; margin-top: 26px; color: var(--muted); font-size: 12px; }
+    dialog { max-width: 510px; width: calc(100% - 36px); border: 1px solid var(--border); border-radius: 15px; padding: 26px; background: var(--panel); color: var(--text); }
+    dialog::backdrop { background: #020810bb; }
+    dialog h2 { margin-bottom: 12px; }
+    dialog .actions { margin-top: 22px; justify-content: flex-end; }
+    .dialog-targets { color: var(--accent); font-size: 13px; overflow-wrap: anywhere; }
+    @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } .shell { width: calc(100% - 32px); } main { padding-top: 27px; } }
+    @media (max-width: 420px) { .card { padding: 19px; } header { gap: 10px; padding: 22px 0; } .brand-caption { display: none; } .badge { font-size: 11px; } .actions button { flex-grow: 1; } }
+    @media (prefers-reduced-motion: no-preference) { button { transition: background .15s, border-color .15s; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand"><div class="mark" aria-hidden="true">w</div><div><div class="brand-name">Wikivibe</div><div class="brand-caption">Подключение к вашим AI-агентам</div></div></div>
+      <div id="connection-badge" class="badge"><span class="dot" aria-hidden="true"></span><span id="connection-label">Загрузка…</span></div>
+    </header>
+    <main id="main" aria-busy="true">
+      <section class="intro" aria-labelledby="title">
+        <div class="eyebrow">Локальная панель Orca</div>
+        <h1 id="title">Один ключ. Ваши инструменты.</h1>
+        <p class="muted">Подключите Wikivibe, выберите модель и настройте совместимых агентов. Изменения в их файлах применяются только с вашего согласия.</p>
+      </section>
+      <div id="message" class="message" role="status" aria-live="polite" aria-atomic="true"><p id="message-text">Загружаем настройки…</p><button id="retry" type="button" hidden>Повторить загрузку</button></div>
+      <div class="layout">
+        <div class="stack">
+          <section class="card" aria-labelledby="account-title">
+            <div class="card-heading"><span class="step" aria-hidden="true">01</span><h2 id="account-title">Подключение</h2></div>
+            <p class="muted">Нет аккаунта? <a id="registration" href="https://api.wikivibe.dev/register?aff=9YAJBL6HLM23" target="_blank" rel="noopener noreferrer">Зарегистрироваться в Wikivibe ↗</a></p>
+            <form id="connect-form">
+              <fieldset id="connect-fields" disabled>
+                <div class="field"><label for="connect-endpoint">Адрес API</label><select id="connect-endpoint"><option value="https://api.wikivibe.dev/v1">api.wikivibe.dev/v1</option><option value="https://vapi.wikivibe.dev/v1">vapi.wikivibe.dev/v1</option></select></div>
+                <div class="field"><label for="api-key">API-ключ</label><input id="api-key" type="password" name="api-key" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Вставьте ключ из личного кабинета" required aria-describedby="key-help"><p id="key-help" class="help">Ключ не отображается в панели. После проверки он сохраняется в защищённом хранилище Orca.</p></div>
+                <div class="actions"><button id="connect" class="primary" type="submit">Проверить и сохранить ключ</button><button id="disconnect" class="danger" type="button" hidden>Отключить</button></div>
+              </fieldset>
+            </form>
+            <div class="divider"></div>
+            <p class="safe">Сохранённый ключ не возвращается в браузер. Повторный ввод нужен только для замены ключа.</p>
+          </section>
+          <section class="card" aria-labelledby="model-title">
+            <div class="card-heading"><span class="step" aria-hidden="true">02</span><h2 id="model-title">Модель и адрес API</h2></div>
+            <p class="muted">Выберите модель из списка вашего аккаунта. Настройки ниже используются при следующем применении к агентам.</p>
+            <form id="preferences-form">
+              <fieldset id="preferences-fields" disabled>
+                <div class="field"><label for="base-url">Адрес API для агентов</label><select id="base-url" aria-describedby="endpoint-help"><option value="https://api.wikivibe.dev/v1">api.wikivibe.dev/v1</option><option value="https://vapi.wikivibe.dev/v1">vapi.wikivibe.dev/v1</option></select><p id="endpoint-help" class="help">При смене адреса заново загрузите модели, затем сохраните настройки.</p></div>
+                <div class="field"><label for="model">Модель</label><select id="model" aria-describedby="model-help"><option value="">Сначала подключите аккаунт</option></select><p id="model-help" class="help">Список предоставляется выбранным API. Проверка ключа и получение моделей не подтверждают успешный запрос к модели или совместимость с протоколом конкретного агента.</p></div>
+                <div class="actions"><button id="refresh-models" type="button">Обновить модели</button><button id="save-preferences" class="primary" type="submit">Сохранить настройки</button></div>
+              </fieldset>
+            </form>
+            <p id="preferences-hint" class="help">Подключите аккаунт, чтобы получить доступные модели.</p>
+          </section>
+        </div>
+        <section class="card" aria-labelledby="agents-title">
+          <div class="card-heading"><span class="step" aria-hidden="true">03</span><h2 id="agents-title">Совместимые агенты</h2></div>
+          <p class="muted">Выберите инструменты и сначала посмотрите, какие файлы будут изменены. Доступность означает поддержку конфигурации, а не проверку установки агента. Ни один агент не выбран заранее.</p>
+          <div class="notice"><p><strong>Важно: ключ в конфигурации агента.</strong> В отличие от хранилища Orca, нативный файл агента может содержать API-ключ в открытом виде. Не публикуйте его и не добавляйте в репозиторий.</p></div>
+          <fieldset id="agent-fields" disabled aria-label="Выбор агентов">
+            <div id="agent-list" class="agent-list"><p class="muted">Загружаем совместимые агенты…</p></div>
+            <p id="selection-count" class="selection">Ничего не выбрано</p>
+            <div class="actions"><button id="preview-button" type="button">Посмотреть изменения</button><button id="restore-button" type="button">Восстановить из копий</button></div>
+            <div id="preview" class="preview" hidden>
+              <h3>Предварительный просмотр</h3>
+              <p id="preview-settings" class="help"></p>
+              <ul id="changes" class="change-list"></ul>
+              <ul id="preview-warnings" class="warnings" hidden></ul>
+              <label class="consent"><input id="consent" type="checkbox"><span>Разрешаю записать API-ключ в открытом виде в указанные конфигурационные файлы выбранных агентов. Я понимаю риск и согласен с перечисленными изменениями.</span></label>
+              <button id="apply-button" class="primary" type="button" disabled>Применить к выбранным агентам</button>
+            </div>
+          </fieldset>
+          <div id="result" class="preview" role="status" aria-live="polite" hidden><h3 id="result-title"></h3><ul id="result-items" class="change-list"></ul><ul id="result-warnings" class="warnings" hidden></ul></div>
+          <p class="help">Восстановление использует резервные копии плагина. Если файл после применения менялся вручную, безопасное восстановление может быть отклонено.</p>
+        </section>
+      </div>
+      <footer class="footnote"><p><strong>Изменения действуют для новых сессий.</strong> Перезапустите выбранный агент после применения или восстановления. Уже запущенные сессии не переключаются автоматически.</p><p>Панель работает только с поддерживаемыми нативными конфигурациями. Закрытые агенты и инструменты без совместимого формата не подключаются. Отключение Wikivibe удаляет ключ из Orca, но не восстанавливает файлы агентов.</p></footer>
+      <p class="help">Страница закрывает локальный сервер после четырёх минут бездействия. Orca также может остановить worker плагина через пять минут после команды, даже при работе со страницей. Если связь пропала, снова выполните «WikiVibe: Настроить». После перезагрузки вкладки также требуется открыть настройку заново.</p>
+    </main>
+  </div>
+  <dialog id="confirmation" aria-labelledby="confirmation-title" aria-describedby="confirmation-description">
+    <h2 id="confirmation-title"></h2>
+    <p id="confirmation-description"></p>
+    <p id="confirmation-targets" class="dialog-targets"></p>
+    <div class="actions"><button id="cancel-confirmation" type="button" autofocus>Отмена</button><button id="confirm-action" type="button" class="danger"></button></div>
+  </dialog>
+  <script nonce="__NONCE__">
+    'use strict';
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const endpoints = new Set(['https://api.wikivibe.dev/v1', 'https://vapi.wikivibe.dev/v1']);
+      const fragment = new URLSearchParams(location.hash.slice(1));
+      const token = fragment.get('token') || '';
+      fragment.delete('token');
+      history.replaceState(null, '', location.pathname + location.search);
+      let state = null;
+      let busy = false;
+      let modelsBase = '';
+      let previewIds = null;
+      let confirmation = null;
+      const selected = new Set();
+
+      function message(text, type = 'info', retry = false) {
+        $('message').hidden = false;
+        $('message').className = 'message' + (type === 'info' ? '' : ' ' + type);
+        $('message').setAttribute('role', type === 'error' ? 'alert' : 'status');
+        $('message').setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        $('message-text').textContent = text;
+        $('retry').hidden = !retry;
+      }
+
+      function ids() { return Array.from(selected); }
+
+      function preferencesDirty() {
+        return Boolean(state && ($('base-url').value !== state.baseUrl || $('model').value !== state.model));
+      }
+
+      function updateControls() {
+        const ready = Boolean(state && token && !busy);
+        $('connect-fields').disabled = !ready;
+        $('preferences-fields').disabled = !ready || !state.connected;
+        $('agent-fields').disabled = !ready;
+        $('disconnect').hidden = !state || !state.connected;
+        $('connect').textContent = state && state.connected ? 'Проверить и заменить ключ' : 'Проверить и сохранить ключ';
+        $('refresh-models').disabled = !ready || !state.connected;
+        $('model').disabled = !ready || !state.connected || modelsBase !== $('base-url').value || !$('model').options.length;
+        $('save-preferences').disabled = !ready || !state.connected || modelsBase !== $('base-url').value || !$('model').value;
+        const canApply = ready && state.connected && Boolean(state.model) && selected.size > 0 && !preferencesDirty();
+        $('preview-button').disabled = !canApply;
+        $('restore-button').disabled = !ready || !selected.size;
+        $('apply-button').disabled = !canApply || !previewIds || !$('consent').checked;
+        $('selection-count').textContent = selected.size ? 'Выбрано агентов: ' + selected.size : 'Ничего не выбрано';
+        $('retry').disabled = busy || !token;
+        $('main').setAttribute('aria-busy', String(busy));
+        if (!state) return;
+        $('connection-badge').className = 'badge' + (state.connected ? ' connected' : '');
+        $('connection-label').textContent = state.connected ? 'Ключ сохранён' : 'Не подключено';
+        if (!state.connected) $('preferences-hint').textContent = 'Подключите аккаунт, чтобы получить доступные модели. Восстановление из копий доступно и без ключа.';
+        else if (modelsBase !== $('base-url').value) $('preferences-hint').textContent = 'Адрес изменён. Обновите список моделей перед сохранением.';
+        else if (preferencesDirty()) $('preferences-hint').textContent = 'Есть несохранённые настройки. Сохраните их перед просмотром и применением.';
+        else if (!state.model) $('preferences-hint').textContent = 'Выберите модель и сохраните настройки перед применением к агентам.';
+        else $('preferences-hint').textContent = 'Настройки сохранены. Уже настроенные файлы агентов изменятся только после нового применения.';
+      }
+
+      function invalidatePreview() {
+        previewIds = null;
+        $('preview').hidden = true;
+        $('consent').checked = false;
+        $('changes').replaceChildren();
+        $('preview-warnings').replaceChildren();
+      }
+
+      function hideResult() { $('result').hidden = true; }
+
+      function modelOptions(models, chosen) {
+        const select = $('model');
+        select.replaceChildren();
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = models.length ? 'Выберите модель…' : 'API не вернул доступных моделей';
+        select.append(placeholder);
+        const seen = new Set();
+        for (const model of models) {
+          if (!model || typeof model.id !== 'string' || !model.id || seen.has(model.id)) continue;
+          seen.add(model.id);
+          const option = document.createElement('option');
+          option.value = model.id;
+          option.textContent = model.id;
+          select.append(option);
+        }
+        select.value = seen.has(chosen) ? chosen : '';
+      }
+
+      function renderAgents() {
+        const list = $('agent-list');
+        list.replaceChildren();
+        const eligible = new Set(state.agents.filter((agent) => agent.available).map((agent) => agent.id));
+        for (const id of selected) if (!eligible.has(id)) selected.delete(id);
+        if (!state.agents.length) {
+          const empty = document.createElement('p');
+          empty.className = 'muted';
+          empty.textContent = 'Поддерживаемые конфигурации не найдены.';
+          list.append(empty);
+        }
+        for (const agent of state.agents) {
+          const label = document.createElement('label');
+          label.className = 'agent' + (agent.available ? '' : ' unavailable');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = selected.has(agent.id);
+          checkbox.disabled = !agent.available;
+          const body = document.createElement('span');
+          body.className = 'agent-body';
+          const title = document.createElement('span');
+          title.className = 'agent-title';
+          title.textContent = agent.label;
+          const description = document.createElement('span');
+          description.className = 'agent-description';
+          description.textContent = (agent.description || '') + (agent.available ? '' : ' · Конфигурация не поддерживается');
+          const path = document.createElement('span');
+          path.className = 'path';
+          path.textContent = agent.configPath || '';
+          body.append(title, description, path);
+          label.append(checkbox, body);
+          checkbox.addEventListener('change', () => {
+            if (checkbox.checked) selected.add(agent.id); else selected.delete(agent.id);
+            invalidatePreview();
+            hideResult();
+            updateControls();
+          });
+          list.append(label);
+        }
+      }
+
+      function renderState(next) {
+        state = next;
+        modelsBase = next.connected ? next.baseUrl : '';
+        $('connect-endpoint').value = next.baseUrl;
+        $('base-url').value = next.baseUrl;
+        modelOptions(next.connected ? next.models : [], next.model);
+        if (!next.connected) $('model').firstElementChild.textContent = 'Сначала подключите аккаунт';
+        $('api-key').value = '';
+        invalidatePreview();
+        renderAgents();
+        updateControls();
+      }
+
+      async function api(path, body) {
+        const response = await fetch(path, {
+          method: body === undefined ? 'GET' : 'POST',
+          headers: { Authorization: 'Bearer ' + token, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+          credentials: 'omit',
+          cache: 'no-store',
+          redirect: 'error',
+          ...(body === undefined ? {} : { body: JSON.stringify(body) })
+        });
+        let data;
+        try { data = await response.json(); }
+        catch { throw new Error('Локальная панель вернула некорректный ответ. Откройте её заново через Orca.'); }
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) throw new Error('Доступ к панели истёк или отклонён. Откройте панель заново через Orca.');
+          throw new Error(typeof data.error === 'string' ? data.error : 'Не удалось выполнить запрос к локальной панели.');
+        }
+        return data;
+      }
+
+      async function perform(loading, operation, { connect = false, retry = false } = {}) {
+        if (busy || !token) return;
+        busy = true;
+        updateControls();
+        message(loading);
+        try { await operation(); }
+        catch (error) {
+          // A connect failure must never reproduce a submitted credential, even if a server error includes it.
+          const text = connect ? 'Не удалось проверить и сохранить ключ. Проверьте ключ, выбранный адрес API и доступность сети. Ключ не был показан в ответе; повторите ввод для новой попытки.' : error instanceof TypeError ? 'Нет связи с локальной панелью. Проверьте, что плагин запущен в Orca, и попробуйте снова.' : error.message || 'Не удалось выполнить действие.';
+          message(text, 'error', retry);
+        } finally {
+          busy = false;
+          updateControls();
+        }
+      }
+
+      function warnings(list, values) {
+        list.replaceChildren();
+        for (const value of values || []) {
+          const item = document.createElement('li');
+          item.textContent = value;
+          list.append(item);
+        }
+        list.hidden = !list.children.length;
+      }
+
+      function result(title, items, notes) {
+        $('result-title').textContent = title;
+        $('result-items').replaceChildren();
+        for (const item of items) {
+          const row = document.createElement('li');
+          const agent = state.agents.find((entry) => entry.id === item.agentId);
+          const name = document.createElement('strong');
+          name.textContent = agent ? agent.label : item.agentId;
+          const path = document.createElement('span');
+          path.className = 'path';
+          path.textContent = item.path;
+          row.append(name, path);
+          $('result-items').append(row);
+        }
+        warnings($('result-warnings'), notes);
+        $('result').hidden = false;
+      }
+
+      async function load() {
+        await perform('Загружаем настройки…', async () => {
+          renderState(await api('/api/state'));
+          message('Панель готова. Выберите подключение, модель и нужных агентов.');
+        }, { retry: true });
+      }
+
+      $('retry').addEventListener('click', load);
+      $('connect-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (busy) return;
+        let key = $('api-key').value.trim();
+        if (!key) { $('api-key').focus(); return; }
+        const baseUrl = $('connect-endpoint').value;
+        if (!endpoints.has(baseUrl)) return;
+        $('api-key').value = '';
+        invalidatePreview();
+        hideResult();
+        perform('Проверяем доступ к API и сохраняем ключ…', async () => {
+          try { renderState(await api('/api/connect', { apiKey: key, baseUrl })); }
+          finally { key = ''; }
+          message('Ключ проверен и сохранён. API предоставил список моделей; совместимость конкретной модели с протоколом агента этим не подтверждается.', 'success');
+        }, { connect: true });
+      });
+
+      $('base-url').addEventListener('change', () => {
+        modelsBase = '';
+        modelOptions([], '');
+        $('model').firstElementChild.textContent = 'Обновите модели для выбранного адреса';
+        invalidatePreview();
+        hideResult();
+        updateControls();
+      });
+      $('model').addEventListener('change', () => { invalidatePreview(); hideResult(); updateControls(); });
+      $('refresh-models').addEventListener('click', () => {
+        const baseUrl = $('base-url').value;
+        const chosen = $('model').value;
+        invalidatePreview();
+        hideResult();
+        perform('Получаем модели выбранного API…', async () => {
+          const data = await api('/api/models', { baseUrl });
+          modelsBase = baseUrl;
+          modelOptions(data.models, chosen);
+          message(data.models.length ? 'Список моделей обновлён. Выберите модель и сохраните настройки.' : 'API не вернул моделей. Применение недоступно до выбора модели.', data.models.length ? 'success' : 'info');
+        });
+      });
+      $('preferences-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        if ($('save-preferences').disabled) return;
+        const baseUrl = $('base-url').value;
+        const model = $('model').value;
+        invalidatePreview();
+        hideResult();
+        perform('Сохраняем адрес API и модель…', async () => {
+          renderState(await api('/api/preferences', { baseUrl, model }));
+          message('Настройки сохранены. Для изменения файлов агентов сначала посмотрите изменения, затем подтвердите применение.', 'success');
+        });
+      });
+
+      $('preview-button').addEventListener('click', () => {
+        const agentIds = ids();
+        invalidatePreview();
+        hideResult();
+        perform('Подготавливаем предварительный просмотр…', async () => {
+          const data = await api('/api/preview', { agentIds });
+          $('changes').replaceChildren();
+          for (const change of data.changes) {
+            const row = document.createElement('li');
+            const agent = state.agents.find((entry) => entry.id === change.agentId);
+            const name = document.createElement('strong');
+            name.textContent = agent ? agent.label : change.agentId;
+            const path = document.createElement('span');
+            path.className = 'path';
+            path.textContent = change.path;
+            const description = document.createElement('div');
+            description.textContent = change.description;
+            row.append(name, path, description);
+            if (change.secretOnDisk) {
+              const note = document.createElement('span');
+              note.className = 'secret-note';
+              note.textContent = 'Этот файл будет содержать API-ключ в открытом виде.';
+              row.append(note);
+            }
+            $('changes').append(row);
+          }
+          warnings($('preview-warnings'), data.warnings);
+          $('preview-settings').textContent = 'Модель: ' + state.model + ' · API: ' + state.baseUrl;
+          previewIds = data.changes.length ? agentIds : null;
+          $('preview').hidden = false;
+          message(data.changes.length ? 'Предварительный просмотр готов. Файлы пока не изменены. Для применения требуется явное согласие ниже.' : 'Изменений нет. Выберите другие поддерживаемые агенты.');
+        });
+      });
+      $('consent').addEventListener('change', updateControls);
+      $('apply-button').addEventListener('click', () => {
+        if ($('apply-button').disabled || !previewIds) return;
+        const agentIds = previewIds.slice();
+        invalidatePreview();
+        hideResult();
+        perform('Применяем настройки к выбранным агентам…', async () => {
+          const data = await api('/api/apply', { agentIds, confirmed: true });
+          result('Результат применения', data.applied, data.warnings);
+          message('Обработка завершена. Проверьте результат и предупреждения ниже. Для использования настроек запустите новые сессии агентов.', 'success');
+        });
+      });
+
+      function ask(kind) {
+        if (busy) return;
+        const agentIds = kind === 'restore' ? ids() : [];
+        if (kind === 'restore' && !agentIds.length) return;
+        confirmation = { kind, agentIds };
+        $('confirmation-title').textContent = kind === 'restore' ? 'Восстановить выбранные конфигурации?' : 'Отключить Wikivibe?';
+        $('confirmation-description').textContent = kind === 'restore' ? 'Плагин восстановит файлы выбранных агентов из своих резервных копий. Изменённые вручную файлы не будут перезаписаны. Новые сессии будут использовать восстановленные настройки.' : 'Ключ будет удалён из защищённого хранилища Orca. Файлы агентов НЕ будут восстановлены: записанный в них ключ останется на диске. Сначала восстановите конфигурации, если хотите убрать эти изменения.';
+        $('confirmation-targets').textContent = kind === 'restore' ? state.agents.filter((agent) => agentIds.includes(agent.id)).map((agent) => agent.label).join(', ') : '';
+        $('confirm-action').textContent = kind === 'restore' ? 'Подтверждаю восстановление' : 'Отключить без восстановления';
+        $('confirmation').showModal();
+      }
+      $('restore-button').addEventListener('click', () => ask('restore'));
+      $('disconnect').addEventListener('click', () => ask('disconnect'));
+      $('cancel-confirmation').addEventListener('click', () => $('confirmation').close());
+      $('confirmation').addEventListener('close', () => { confirmation = null; });
+      $('confirm-action').addEventListener('click', () => {
+        const action = confirmation;
+        if (!action) return;
+        confirmation = null;
+        $('confirmation').close();
+        invalidatePreview();
+        hideResult();
+        if (action.kind === 'restore') {
+          perform('Восстанавливаем конфигурации из резервных копий…', async () => {
+            const data = await api('/api/restore', { agentIds: action.agentIds, confirmed: true });
+            result('Восстановленные файлы', data.restored, data.warnings);
+            message(data.restored.length ? 'Восстановление завершено. Запустите новые сессии выбранных агентов.' : 'Файлы не восстановлены. Доступных резервных копий для выбранных агентов нет.', data.restored.length ? 'success' : 'info');
+          });
+        } else {
+          perform('Удаляем ключ из хранилища Orca…', async () => {
+            renderState(await api('/api/disconnect', {}));
+            message('Wikivibe отключён. Ключ удалён из Orca, но файлы агентов не изменились. При необходимости выберите агентов и восстановите их из копий.', 'success');
+          });
+        }
+      });
+
+      if (!token) {
+        $('main').setAttribute('aria-busy', 'false');
+        $('connection-label').textContent = 'Нет доступа';
+        message('Нет токена доступа. Откройте эту панель через плагин Wikivibe в Orca. Токен не сохраняется, поэтому после перезагрузки вкладки панель нужно открыть заново.', 'error');
+      } else {
+        load();
+      }
+    })();
+  </script>
+</body>
+</html>

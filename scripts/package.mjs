@@ -1,0 +1,14 @@
+import { cp, mkdir, readFile, stat } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+const manifest = JSON.parse(await readFile('orca-plugin.json', 'utf8'));
+const files = ['orca-plugin.json', 'main.mjs', 'src', 'ui', 'README.md'];
+for (const file of files) await stat(file);
+await mkdir('dist', { recursive: true });
+const folder = `dist/${manifest.publisher}.${manifest.id}-${manifest.version}`;
+await mkdir(folder, { recursive: true });
+for (const file of files) await cp(file, `${folder}/${file}`, { recursive: true });
+const output = `dist/${manifest.publisher}.${manifest.id}-${manifest.version}.tar.gz`;
+execFileSync('tar', ['-czf', output, ...files]);
+console.log(output);
+console.log(`Normal Orca install: Settings → Plugins → Install plugin → Local folder → ${folder}`);
+console.log('Archive is a transport artifact, not a claim that Orca supports archive import. Use a local plugin directory or publish the repository for marketplace installation.');

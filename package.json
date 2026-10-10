@@ -1,0 +1,14 @@
+{
+  "name": "wikivibe-orca-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "files": ["orca-plugin.json", "main.mjs", "src", "ui", "README.md"],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "package:plugin": "node scripts/package.mjs"
+  }
+}
