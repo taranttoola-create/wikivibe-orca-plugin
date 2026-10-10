@@ -22,7 +22,7 @@ async function setup(t, fetchImpl) {
 
 test('failed new credential validation preserves old vault and preferences', async t => {
   let reject = false;
-  const { service, stores } = await setup(t, async () => reject ? new Response('', { status: 401 }) : Response.json({ data: [{ id: 'a' }] }));
+  const { service, stores } = await setup(t, async url => reject ? new Response('', { status: 401 }) : Response.json({ data: url.endsWith('/marketplace/models') ? [] : [{ id: 'a' }] }));
   await service.request('connect', { apiKey: 'old-fixture', baseUrl: ENDPOINTS[0] });
   await service.request('preferences', { baseUrl: ENDPOINTS[0], model: 'a' });
   reject = true;
@@ -32,10 +32,21 @@ test('failed new credential validation preserves old vault and preferences', asy
 });
 
 test('model refresh for another endpoint does not contaminate saved state', async t => {
-  const { service } = await setup(t, async url => Response.json({ data: [{ id: url.startsWith(ENDPOINTS[0]) ? 'a' : 'b' }] }));
+  const { service } = await setup(t, async url => Response.json({ data: url.endsWith('/marketplace/models') ? [] : [{ id: url.startsWith(ENDPOINTS[0]) ? 'a' : 'b' }] }));
   await service.request('connect', { apiKey: 'fixture', baseUrl: ENDPOINTS[0] });
-  assert.deepEqual((await service.request('models', { baseUrl: ENDPOINTS[1] })).models, [{ id: 'b' }]);
+  assert.deepEqual((await service.request('models', { baseUrl: ENDPOINTS[1] })).models, [{ id: 'b', available: true }]);
   assert.deepEqual((await service.request('state')).models, []);
   await assert.rejects(service.request('preferences', { baseUrl: ENDPOINTS[0], model: 'b' }));
   await assert.rejects(service.request('apply', { agentIds: ['opencode'], confirmed: false }));
+});
+
+test('published models unavailable to a key are visible but cannot overwrite preferences', async t => {
+  const { service, stores } = await setup(t, async url => Response.json({ data:
+    url.endsWith('/marketplace/models') ? [{ models: [{ id: 'allowed' }, { id: 'other-group' }] }] : [{ id: 'allowed' }]
+  }));
+  const state = await service.request('connect', { apiKey: 'fixture', baseUrl: ENDPOINTS[0] });
+  assert.deepEqual(state.models, [{ id: 'allowed', available: true }, { id: 'other-group', available: false }]);
+  await service.request('preferences', { baseUrl: ENDPOINTS[0], model: 'allowed' });
+  await assert.rejects(service.request('preferences', { baseUrl: ENDPOINTS[0], model: 'other-group' }));
+  assert.equal(stores.storage.get('preferences').model, 'allowed');
 });

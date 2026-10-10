@@ -94,7 +94,7 @@
 <body>
   <div class="shell">
     <header>
-      <div class="brand"><div class="mark" aria-hidden="true">w</div><div><div class="brand-name">WikiVibe Gateway</div><div class="brand-caption">Плагин для Orca · 1.0.4</div></div></div>
+      <div class="brand"><div class="mark" aria-hidden="true">w</div><div><div class="brand-name">WikiVibe Gateway</div><div class="brand-caption">Плагин для Orca · 1.0.5</div></div></div>
       <div id="connection-badge" class="badge"><span class="dot" aria-hidden="true"></span><span id="connection-label">Загрузка…</span></div>
     </header>
     <main id="main" aria-busy="true">
@@ -121,11 +121,11 @@
           </section>
           <section class="card" aria-labelledby="model-title">
             <div class="card-heading"><span class="step" aria-hidden="true">02</span><h2 id="model-title">Модель и адрес API</h2></div>
-            <p class="muted">Выберите модель из каталога вашего аккаунта. Эти настройки плагин использует при следующем применении к агентам.</p>
+            <p class="muted">Показаны все опубликованные модели WikiVibe и дополнительные модели текущего ключа. Эти настройки плагин использует при следующем применении к агентам.</p>
             <form id="preferences-form">
               <fieldset id="preferences-fields" disabled>
                 <div class="field"><label for="base-url">Адрес API для агентов</label><select id="base-url" aria-describedby="endpoint-help"><option value="https://api.wikivibe.dev/v1">api.wikivibe.dev/v1</option><option value="https://vapi.wikivibe.dev/v1">vapi.wikivibe.dev/v1</option></select><p id="endpoint-help" class="help">При смене адреса заново загрузите модели, затем сохраните настройки.</p></div>
-                <div class="field"><label for="model">Модель</label><select id="model" aria-describedby="model-help"><option value="">Сначала сохраните API-ключ</option></select><p id="model-help" class="help">Каталог возвращает выбранный API. Проверка ключа и загрузка каталога не подтверждают, что запрос к модели пройдёт или что она поддерживает протокол выбранного агента.</p></div>
+                <div class="field"><label for="model">Модель</label><select id="model" aria-describedby="model-help"><option value="">Сначала сохраните API-ключ</option></select><p id="model-help" class="help">Модели без доступа у текущего ключа показаны, но недоступны для выбора. Для них нужен ключ соответствующей группы. Наличие в каталоге не подтверждает совместимость с протоколом агента.</p></div>
                 <div class="actions"><button id="refresh-models" type="button">Обновить модели</button><button id="save-preferences" class="primary" type="submit">Сохранить настройки</button></div>
               </fieldset>
             </form>
@@ -236,7 +236,7 @@
         select.replaceChildren();
         const placeholder = document.createElement('option');
         placeholder.value = '';
-        placeholder.textContent = models.length ? 'Выберите модель…' : 'API не вернул доступных моделей';
+        placeholder.textContent = models.length ? 'Выберите модель… · всего ' + models.length : 'API не вернул доступных моделей';
         select.append(placeholder);
         const seen = new Set();
         for (const model of models) {
@@ -244,10 +244,11 @@
           seen.add(model.id);
           const option = document.createElement('option');
           option.value = model.id;
-          option.textContent = model.id;
+          option.textContent = model.id + (model.available === false ? ' · нет доступа у этого ключа' : '');
+          option.disabled = model.available === false;
           select.append(option);
         }
-        select.value = seen.has(chosen) ? chosen : '';
+        select.value = models.some(model => model.id === chosen && model.available !== false) ? chosen : '';
       }
 
       function renderAgents() {

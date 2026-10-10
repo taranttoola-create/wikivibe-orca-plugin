@@ -18,7 +18,7 @@ const host = { async call(method, { key, value }) {
   return { ok: true };
 } };
 const fixture = process.argv.includes('--fixture');
-const service = createService(host, { home, ...(fixture ? { fetchImpl: async () => Response.json({ data: [{ id: 'fixture-model' }] }) } : {}) });
+const service = createService(host, { home, ...(fixture ? { fetchImpl: async url => Response.json({ data: url.endsWith('/marketplace/models') ? [{ models: [{ id: 'fixture-model' }, { id: 'other-group-model' }] }] : [{ id: 'fixture-model' }] }) } : {}) });
 const control = await startControlServer(service, { idleMs: 10 * 60_000 });
 console.log(JSON.stringify({ url: control.url, home, mode: fixture ? 'isolated-fixture' : 'real-network' }));
 async function cleanup() { await control.close(); await rm(home, { recursive: true, force: true }); }

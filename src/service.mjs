@@ -1,4 +1,4 @@
-import { apiKey, endpoint, ENDPOINTS, REGISTRATION_URL, listModels } from './client.mjs';
+import { apiKey, endpoint, ENDPOINTS, REGISTRATION_URL, listModels, listCatalog } from './client.mjs';
 import { listAgents, previewAgents, applyAgents, restoreAgents } from './adapters.mjs';
 
 export function createService(host, { home, fetchImpl = fetch } = {}) {
@@ -30,9 +30,9 @@ export function createService(host, { home, fetchImpl = fetch } = {}) {
       case 'connect': {
         const preferences = { baseUrl: endpoint(body.baseUrl), model: '' };
         const credential = apiKey(body.apiKey);
-        const catalog = await listModels(preferences.baseUrl, credential, { fetchImpl });
+        const catalog = await listCatalog(preferences.baseUrl, credential, { fetchImpl });
         const previous = await config();
-        if (previous.baseUrl === preferences.baseUrl && catalog.some(m => m.id === previous.model)) preferences.model = previous.model;
+        if (previous.baseUrl === preferences.baseUrl && catalog.some(m => m.id === previous.model && m.available)) preferences.model = previous.model;
         await host.call('secrets.set', { key: 'apiKey', value: credential });
         await save(preferences);
         models = catalog;
@@ -42,14 +42,14 @@ export function createService(host, { home, fetchImpl = fetch } = {}) {
       case 'models': {
         const preferences = await config();
         const selected = body.baseUrl === undefined ? preferences.baseUrl : endpoint(body.baseUrl);
-        models = await listModels(selected, await key(), { fetchImpl });
+        models = await listCatalog(selected, await key(), { fetchImpl });
         modelsBase = selected;
         return { models };
       }
       case 'preferences': {
         const selected = endpoint(body.baseUrl);
-        const catalog = await listModels(selected, await key(), { fetchImpl });
-        if (typeof body.model !== 'string' || !catalog.some(m => m.id === body.model)) throw new Error('Выберите модель из каталога по выбранному адресу API.');
+        const catalog = await listCatalog(selected, await key(), { fetchImpl });
+        if (typeof body.model !== 'string' || !catalog.some(m => m.id === body.model && m.available)) throw new Error('Эта модель недоступна текущему API-ключу. Выберите модель с доступом или замените ключ.');
         await save({ baseUrl: selected, model: body.model });
         models = catalog;
         modelsBase = selected;
