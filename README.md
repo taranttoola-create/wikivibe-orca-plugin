@@ -11,7 +11,7 @@
 
 Для переноса готовых файлов разработчик может выполнить `npm run package:plugin`: в `dist/` появятся самостоятельная папка плагина и `.tar.gz`. Установите папку через Local folder; архив сначала распакуйте. Node/npm нужны для разработки и упаковки, не для установки готовой папки: worker использует runtime Orca.
 
-Установка через **Git URL** также штатная, но требует опубликованного репозитория и явного `#tag` или `#commit`. Этот проект пока не имеет Git remote и не опубликован в marketplace. Чтобы подготовить реальный marketplace index после публикации, выполните `node scripts/marketplace.mjs <git-url> <tag-or-commit>` и сохраните результат как `orca-marketplace.json` в своём marketplace-репозитории. Не подставляйте выдуманный URL.
+Репозиторий: https://github.com/taranttoola-create/wikivibe-orca-plugin. Для обычной установки через **Install plugin → Git URL** используйте `https://github.com/taranttoola-create/wikivibe-orca-plugin.git#4521ffe` — фиксированный commit первой версии плагина. Публикация в marketplace пока не выполнена. Чтобы подготовить marketplace index, выполните `node scripts/marketplace.mjs https://github.com/taranttoola-create/wikivibe-orca-plugin.git 4521ffe` и сохраните результат как `orca-marketplace.json` в своём marketplace-репозитории.
 
 ## Подключение
 
