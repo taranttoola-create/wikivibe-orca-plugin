@@ -11,5 +11,5 @@ const output = `dist/${manifest.publisher}.${manifest.id}-${manifest.version}.ta
 execFileSync('tar', ['-czf', output, ...files]);
 console.log(output);
 console.log(`Установка папки: Settings → Plugins → Install plugin → Local folder → ${folder}`);
-console.log('Публикация не выполняется упаковкой. Git URL с новым тегом используйте только после отдельной публикации этого тега.');
+console.log('Релиз: https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/tag/v1.1.0');
 console.log('Архив предназначен для переноса: распакуйте его и установите папку через Local folder. Прямой импорт архива не поддерживается. После включения откройте панель WikiVibe в правой панели Orca.');
