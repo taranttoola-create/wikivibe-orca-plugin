@@ -237,7 +237,7 @@ function tomlConfig(text, value) {
   }
   const matches = [];
   for (let i = rootEnd; i < lines.length; i++) {
-    if (/^\s*\[.*(?:["']wikivibe["']|\bwikivibe\b)/.test(lines[i])) matches.push(i);
+    if (/^\s*\[\s*model_providers\s*\.\s*(?:wikivibe(?=\s*(?:\.|\]))|["']wikivibe["'])/.test(lines[i])) matches.push(i);
     if (/^\s*\[\s*["']model_providers/.test(lines[i])) fail('Ключи поставщиков TOML в кавычках не изменяются.');
   }
   if (matches.length) fail('Конфликт: поставщик wikivibe уже существует в TOML.');

@@ -217,3 +217,86 @@ test('accepted key with denied vault permission reports storage failure without 
   await assert.rejects(service.request('connect', { apiKey: 'secret-fixture', baseUrl: ENDPOINTS[0] }), error => error.code === 'storage' && !error.message.includes('secret-fixture'));
   assert.equal(validated, true);
 });
+
+test('account requests use only the stored endpoint and credential and return a safe timestamped snapshot', async t => {
+  const calls = [];
+  const { service, stores } = await setup(t, async (url, options) => {
+    calls.push(url);
+    assert.equal(options.headers.Authorization, 'Bearer stored-fixture');
+    return Response.json({
+      status: 'active', isValid: true, balance: 0,
+      billing: { source: 'balance', mode: 'auto', available: true, unit: 'USD', remaining: 0, plan_name: 'stored-fixture' },
+      usage: { rpm: 0, today: { actual_cost: 0, requests: 0 } },
+      capturedAt: 'stored-fixture', apiKey: 'stored-fixture', message: 'stored-fixture'
+    });
+  });
+  stores.secrets.set('apiKey', 'stored-fixture');
+  stores.storage.set('preferences', { baseUrl: ENDPOINTS[1] });
+  const before = Date.now();
+  const account = await service.request('account', { baseUrl: 'https://attacker.invalid/v1', apiKey: 'body-fixture' });
+  assert.deepEqual(calls, [`${ENDPOINTS[1]}/usage?days=7`]);
+  assert.equal(account.status, 'active');
+  assert.equal(account.balance, 0);
+  assert.equal(account.billing.remaining, 0);
+  assert.equal(account.billing.balance, null);
+  assert.equal(account.usage.today.actual_cost, 0);
+  assert.equal(account.usage.today.cost, null);
+  assert.equal(account.usage.total, null);
+  const capturedAt = Date.parse(account.capturedAt);
+  assert.ok(capturedAt >= before && capturedAt <= Date.now());
+  assert.equal(new Date(capturedAt).toISOString(), account.capturedAt);
+  assert.equal(JSON.stringify(account).includes('stored-fixture'), false);
+  assert.equal(JSON.stringify(account).includes('body-fixture'), false);
+  assert.equal(stores.secrets.get('apiKey'), 'stored-fixture');
+  assert.deepEqual(stores.storage.get('preferences'), { baseUrl: ENDPOINTS[1] });
+});
+
+test('optional account auth failures never undo connection, roster or stored preferences', async t => {
+  let accountStatus = 401;
+  const calls = [];
+  const { service, stores } = await setup(t, async url => {
+    calls.push(url);
+    if (url.endsWith('/models')) return response(['accessible']);
+    return new Response('secret-fixture', { status: accountStatus });
+  });
+  const connected = await service.request('connect', { baseUrl: ENDPOINTS[0], apiKey: 'secret-fixture' });
+  assert.equal(connected.connected, true);
+  assert.deepEqual(calls, [`${ENDPOINTS[0]}/models`]);
+  for (accountStatus of [401, 403]) {
+    await assert.rejects(service.request('account'), error => error.code === 'api_auth' && !error.message.includes('secret-fixture'));
+    const state = await service.request('state');
+    assert.equal(state.connected, true);
+    assert.deepEqual(state.models, [{ id: 'accessible' }]);
+    assert.equal(stores.secrets.get('apiKey'), 'secret-fixture');
+    assert.deepEqual(stores.storage.get('preferences'), { baseUrl: ENDPOINTS[0] });
+  }
+  assert.deepEqual((await service.request('models')).models, [{ id: 'accessible' }]);
+});
+
+test('account snapshots refresh without stale state and failed requests leave the service usable', async t => {
+  let balance = 5;
+  let malformed = false;
+  const { service } = await setup(t, async url => {
+    if (url.endsWith('/models')) return response(['a']);
+    return malformed ? Response.json({ error: 'secret-fixture' }) : Response.json({ balance });
+  });
+  await service.request('connect', { baseUrl: ENDPOINTS[0], apiKey: 'secret-fixture' });
+  assert.equal((await service.request('account')).balance, 5);
+  malformed = true;
+  await assert.rejects(service.request('account'), error => error.code === 'api_account' && !error.message.includes('secret-fixture'));
+  malformed = false;
+  balance = 0;
+  assert.equal((await service.request('account')).balance, 0);
+  assert.equal((await service.request('state')).connected, true);
+});
+
+test('account never fetches without a stored key, including after disconnect', async t => {
+  let calls = 0;
+  const { service } = await setup(t, async () => { calls++; return response(['a']); });
+  await assert.rejects(service.request('account', { apiKey: 'body-fixture' }), /Сначала проверьте/);
+  assert.equal(calls, 0);
+  await service.request('connect', { baseUrl: ENDPOINTS[0], apiKey: 'fixture' });
+  await service.request('disconnect');
+  await assert.rejects(service.request('account'), /Сначала проверьте/);
+  assert.equal(calls, 1);
+});

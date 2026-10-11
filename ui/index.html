@@ -120,6 +120,13 @@
             <div class="divider"></div>
             <p class="safe">Сохранённый ключ не возвращается в браузер. Повторный ввод нужен только для замены ключа.</p>
           </section>
+          <section class="card" aria-labelledby="usage-title">
+            <h2 id="usage-title">Лимиты и расходы WikiVibe</h2>
+            <p class="help">Баланс аккаунта и использование сохранённого API-ключа. Расходы других ключей сюда не входят.</p>
+            <p id="usage-status" role="status">Сначала сохраните API-ключ.</p>
+            <dl id="usage-values"></dl>
+            <button id="refresh-account" type="button" disabled>Обновить лимиты и расходы</button>
+          </section>
           <section class="card" aria-labelledby="catalog-title">
             <div class="card-heading"><span class="step" aria-hidden="true">02</span><h2 id="catalog-title">Доступные модели и адрес API</h2></div>
             <p class="muted">Ниже — все модели из авторизованного ответа WikiVibe для сохранённого ключа и выбранного адреса. Плагин добавляет их провайдеру, не выбирая модель и не меняя активную модель агента.</p>
@@ -216,6 +223,7 @@
         if (!state) return;
         $('connection-badge').className = 'badge' + (state.connected ? ' connected' : '');
         $('connection-label').textContent = state.connected ? 'Ключ сохранён' : 'Нет сохранённого ключа';
+        $('refresh-account').disabled = !ready || !state.connected;
         if (!state.connected) $('preferences-hint').textContent = 'Проверьте и сохраните API-ключ, чтобы загрузить доступные модели. Восстановление из резервных копий доступно и без ключа.';
         else if (modelsBase !== $('base-url').value) $('preferences-hint').textContent = 'Адрес API изменён. Обновите список моделей перед сохранением.';
         else if (preferencesDirty()) $('preferences-hint').textContent = 'Есть несохранённые настройки. Сохраните их перед просмотром и применением.';
@@ -347,6 +355,48 @@
         }
         list.hidden = !list.children.length;
       }
+      function renderAccount(account) {
+        const list = $('usage-values');
+        list.replaceChildren();
+        const money = value => value === null || value === undefined ? 'Нет данных' : new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'USD', maximumFractionDigits: 6 }).format(value);
+        const number = value => value === null || value === undefined ? 'Нет данных' : new Intl.NumberFormat('ru-RU').format(value);
+        const row = (label, value) => {
+          const term = document.createElement('dt');
+          const detail = document.createElement('dd');
+          term.textContent = label;
+          detail.textContent = value;
+          list.append(term, detail);
+        };
+        row('Баланс аккаунта', money(account.balance));
+        row('Статус ключа', account.isValid === true ? 'Активен' : account.isValid === false ? 'Недействителен' : 'Нет данных');
+        row('Источник оплаты', account.billing?.source === 'balance' ? 'Баланс' : account.billing?.source === 'subscription' ? 'Подписка' : 'Нет данных');
+        row('Лимит ключа', money(account.quota?.limit));
+        row('Израсходовано по лимиту', money(account.quota?.used));
+        row('Остаток лимита', money(account.quota?.remaining));
+        for (const limit of account.rate_limits || []) row('Лимит ' + limit.window, money(limit.used) + ' / ' + money(limit.limit) + '; осталось ' + money(limit.remaining));
+        row('Расходы ключа сегодня', money(account.usage?.today?.actual_cost ?? account.usage?.today?.cost));
+        row('Запросов сегодня', number(account.usage?.today?.requests));
+        row('Токенов сегодня', number(account.usage?.today?.total_tokens));
+        row('Расходы ключа за весь срок', money(account.usage?.total?.actual_cost ?? account.usage?.total?.cost));
+        row('Запросов за весь срок', number(account.usage?.total?.requests));
+        $('usage-status').textContent = 'Обновлено: ' + new Date(account.capturedAt).toLocaleString('ru-RU');
+      }
+
+      async function refreshAccount() {
+        if (!state?.connected) {
+          $('usage-values').replaceChildren();
+          $('usage-status').textContent = 'Сначала сохраните API-ключ.';
+          return;
+        }
+        $('usage-status').textContent = 'Загружаются лимиты и расходы…';
+        try { renderAccount(await api('/api/account', {})); }
+        catch (error) {
+          $('usage-values').replaceChildren();
+          $('usage-status').textContent = error instanceof TypeError ? 'Нет связи с локальной панелью.' : error.message;
+        }
+      }
+
+      $('refresh-account').addEventListener('click', () => perform('Обновляются данные аккаунта…', refreshAccount));
 
       function result(title, items, notes) {
         $('result-title').textContent = title;
@@ -375,6 +425,7 @@
             modelsBase = state.baseUrl;
             renderModels(data.models);
           }
+          await refreshAccount();
           message('Панель готова. Сохраните API-ключ и выберите нужных агентов. Модель выбирается в агенте.');
         }, { retry: true });
       }
@@ -397,6 +448,7 @@
         perform('Проверяется доступ к API и сохраняется ключ…', async () => {
           try { renderState(await api('/api/connect', { apiKey: key, baseUrl })); }
           finally { key = ''; }
+          await refreshAccount();
           message('Ключ проверен и сохранён в зашифрованном хранилище Orca. Загружены все доступные этому ключу модели. Запросы к моделям и совместимость с протоколами агентов не проверялись.', 'success');
         }, { connect: true });
       });
@@ -520,6 +572,7 @@
         } else {
           perform('Удаляется сохранённый ключ из хранилища плагина в Orca…', async () => {
             renderState(await api('/api/disconnect', {}));
+            await refreshAccount();
             message('Сохранённый ключ удалён из хранилища плагина в Orca. Файлы агентов не изменились; записанный в них ключ остаётся на диске. Чтобы отменить изменения, выберите агентов и восстановите файлы из резервных копий. Ключ в WikiVibe не отозван.', 'success');
           });
         }

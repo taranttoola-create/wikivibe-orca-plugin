@@ -3,7 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { ConnectionError, CONNECTION_MESSAGES } from './connection-errors.mjs';
 
-const OPERATIONS = new Set(['connect', 'models', 'preferences', 'preview', 'apply', 'restore', 'disconnect', 'register']);
+const OPERATIONS = new Set(['connect', 'models', 'preferences', 'preview', 'apply', 'restore', 'disconnect', 'register', 'account']);
 export async function startControlServer(service, { port = 0, idleMs = 4 * 60_000 } = {}) {
   const token = randomBytes(32).toString('hex');
   const template = await readFile(new URL('../ui/index.html', import.meta.url), 'utf8');
@@ -57,7 +57,7 @@ export async function startControlServer(service, { port = 0, idleMs = 4 * 60_00
       const value = await service.request(action, body);
       json(response, 200, value);
     } catch (error) {
-      if (action === 'connect') {
+      if (action === 'connect' || action === 'account') {
         const code = error instanceof ConnectionError && Object.hasOwn(CONNECTION_MESSAGES, error.code) ? error.code : 'unknown';
         json(response, 400, { code, error: CONNECTION_MESSAGES[code] });
       } else {

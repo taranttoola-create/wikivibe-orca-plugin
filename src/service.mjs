@@ -1,4 +1,4 @@
-import { apiKey, endpoint, ENDPOINTS, REGISTRATION_URL, listModels } from './client.mjs';
+import { apiKey, endpoint, ENDPOINTS, REGISTRATION_URL, listModels, listAccount } from './client.mjs';
 import { listAgents, previewAgents, applyAgents, restoreAgents } from './adapters.mjs';
 import { ConnectionError } from './connection-errors.mjs';
 
@@ -53,6 +53,11 @@ export function createService(host, { home, fetchImpl = fetch, openRegistration 
         models = await roster(selected, await key());
         modelsBase = selected;
         return { models };
+      }
+      case 'account': {
+        const preferences = await config();
+        const account = await listAccount(preferences.baseUrl, await key(), { fetchImpl });
+        return { ...account, capturedAt: new Date().toISOString() };
       }
       case 'preferences': {
         const selected = endpoint(body.baseUrl);

@@ -8,6 +8,17 @@ import { listAgents, previewAgents, applyAgents, restoreAgents } from '../src/ad
 
 const endpoint = 'https://api.wikivibe.dev/v1';
 const value = { apiKey: 'wv-test-key-42', baseUrl: endpoint, models: [{ id: 'wv-code-1' }, { id: 'vendor/wv-code-2' }] };
+test('Codex accepts a WikiVibe project path without treating it as a provider', async () => {
+  const root = await home();
+  const original = 'model = "keep-model"\nmodel_provider = "keep-provider"\n[projects."/work/wikivibe-plugin"]\ntrust_level = "trusted"\n';
+  await put(root, '.codex/config.toml', original);
+  await applyAgents(['codex'], value, { home: root, confirmed: true });
+  const config = await get(root, '.codex/config.toml');
+  assert.ok(config.startsWith(original));
+  assert.match(config, /\[model_providers\.wikivibe\]/);
+  await restoreAgents(['codex'], { home: root });
+  assert.equal(await get(root, '.codex/config.toml'), original);
+});
 let homes = [];
 async function home() {
   const root = await mkdtemp(path.join(tmpdir(), 'wikivibe-adapters-'));
