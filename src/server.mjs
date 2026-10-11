@@ -3,7 +3,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { ConnectionError, CONNECTION_MESSAGES } from './connection-errors.mjs';
 
-const OPERATIONS = new Set(['connect', 'models', 'preferences', 'preview', 'apply', 'restore', 'disconnect']);
+const OPERATIONS = new Set(['connect', 'models', 'preferences', 'preview', 'apply', 'restore', 'disconnect', 'register']);
 export async function startControlServer(service, { port = 0, idleMs = 4 * 60_000 } = {}) {
   const token = randomBytes(32).toString('hex');
   const template = await readFile(new URL('../ui/index.html', import.meta.url), 'utf8');

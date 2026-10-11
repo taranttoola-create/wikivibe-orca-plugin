@@ -2,6 +2,8 @@ import { homedir } from 'node:os';
 import { promises as fs, constants } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { parse as parseJSONC, modify, applyEdits } from './vendor/jsonc-parser/lib/esm/main.js';
+import { parseDocument } from './vendor/yaml/browser/index.js';
 
 // Native format sources (not a claim that a particular gateway model supports tools):
 // Claude: https://code.claude.com/docs/en/llm-gateway-connect
@@ -16,14 +18,14 @@ import { createHash, randomUUID } from 'node:crypto';
 // Catalog: https://aider.chat/docs/config/adv-model-settings.html
 // /models: https://github.com/Aider-AI/aider/blob/main/aider/models.py
 // Qwen: https://qwenlm.github.io/qwen-code-docs/en/users/configuration/auth/
-// Only default user paths and our opt-in Codex profile are managed. JSONC,
-// complex YAML/TOML, other profiles and closed agents are not rewritten.
+// Default local paths and our opt-in Codex profile are managed. Existing
+// WikiVibe catalogs retain credentials/routing; unrelated profiles are untouched.
 const ENDPOINTS = new Set(['https://api.wikivibe.dev/v1', 'https://vapi.wikivibe.dev/v1']);
 const BACKUPS = '.wikivibe-gateway-backups';
 const AGENTS = [
   { id: 'claude', label: 'Claude Code', rel: '.claude/settings.json', protocol: 'Anthropic Messages', description: 'В ~/.claude/settings.json: env.ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN и полный modelPicker (Claude Code ≥ 2.1.242). Отдельный поставщик WikiVibe не поддерживается: шлюз заменяет Anthropic endpoint. Текущая модель не меняется; выбор через /model.' },
   { id: 'codex', label: 'Codex', rel: '.codex/config.toml', protocol: 'OpenAI Responses', description: 'Регистрация model_providers.wikivibe в ~/.codex/config.toml; ~/.codex/wikivibe.config.toml и wikivibe-models.json — отдельный полный каталог. Пользователь включает профиль штатно: codex -p wikivibe, затем /model. Базовые model/model_provider не меняются. Нужна версия с профильными файлами и model_catalog_json; Desktop/Orca picker не гарантируется.' },
-  { id: 'opencode', label: 'OpenCode', rel: '.config/opencode/opencode.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.config/opencode/opencode.json: provider.wikivibe с options.baseURL, options.apiKey и всеми models через @ai-sdk/openai-compatible. Текущая model не меняется; выбор через /models. JSONC не изменяется.' },
+  { id: 'opencode', label: 'OpenCode', rel: '.config/opencode/opencode.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.config/opencode/opencode.json или .jsonc: provider WikiVibe и все models. Существующий WikiVibe определяется по endpoint; его ID, credentials и выбранная model сохраняются. Выбор через /models.' },
   { id: 'pi', label: 'Pi', rel: '.pi/agent/models.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.pi/agent/models.json: providers.wikivibe с baseUrl, apiKey, api = openai-completions и всеми models. Существующий settings.json/enabledModels расширяется ID wikivibe/<id>; defaultProvider/defaultModel не меняются. Выбор через /model.' },
   { id: 'omp', label: 'oh-my-pi', rel: '.omp/agent/models.yml', protocol: 'OpenAI Chat Completions', description: 'В ~/.omp/agent/models.yml: providers.wikivibe с baseUrl, apiKey, api = openai-completions и всеми models. Поддерживается .yaml и простой YAML. Фильтры config.yml расширяются только для WikiVibe; modelRoles не меняются. Выбор через /model.' },
   { id: 'aider', label: 'Aider', rel: '.aider.conf.yml', protocol: 'OpenAI Chat Completions', description: 'В ~/.aider.conf.yml: openai-api-base и openai-api-key; ~/.aider.model.metadata.json регистрирует весь каталог для /models. Отдельного поставщика WikiVibe нет: используется openai/<id>, общий OpenAI endpoint заменяется. Текущая model не меняется; выбор через /model openai/<id>. /models также показывает встроенные модели LiteLLM, не подтверждённые ключом; лимиты и цены неизвестны.' },
@@ -70,6 +72,55 @@ function provider(parent, key, value) {
   parent[key] = value;
 }
 
+function wikiRoute(url) {
+  return typeof url === 'string' && /^https:\/\/(?:api|vapi)\.wikivibe\.(?:dev|ru)\/v1\/?$/.test(url);
+}
+function parseOpenCode(text) {
+  const errors = [];
+  const config = parseJSONC(text || '{}', errors, { allowTrailingComma: true });
+  if (errors.length || !object(config)) fail('OpenCode: некорректный JSON/JSONC; файл не изменён.');
+  return config;
+}
+function openCodeConfig(text, value) {
+  const config = parseOpenCode(text);
+  const providers = child(config, 'provider');
+  const existing = Object.entries(providers).filter(([, entry]) => wikiRoute(entry?.options?.baseURL));
+  const named = existing.filter(([id]) => ['wikivibe', 'wikiwibe'].includes(id.toLowerCase()));
+  const candidates = named.length ? named : existing;
+  if (candidates.length > 1) fail('OpenCode: несколько основных маршрутов WikiVibe; автоматическое изменение неоднозначно.');
+  const [id, entry] = candidates[0] ?? ['wikivibe', undefined];
+  if (!entry && own(providers, id)) fail('OpenCode: wikivibe указывает на другой endpoint; файл не изменён.');
+  if (entry && !object(entry.models ?? {})) fail('OpenCode: models должен быть объектом.');
+  const models = Object.fromEntries(value.models.map(({ id: model }) => [model, entry?.models?.[model] ?? { name: model }]));
+  let output = text || '{}\n';
+  const formattingOptions = { insertSpaces: true, tabSize: 2, eol: text.includes('\r\n') ? '\r\n' : '\n' };
+  const set = (keys, setting) => { output = applyEdits(output, modify(output, keys, setting, { formattingOptions })); };
+  if (entry) set(['provider', id, 'models'], models);
+  else set(['provider', id], { npm: '@ai-sdk/openai-compatible', name: 'WikiVibe', options: { baseURL: value.baseUrl, apiKey: value.apiKey }, models });
+  for (const [key, remove] of [['enabled_providers', false], ['disabled_providers', true]]) {
+    expandAllowlist(config, key, [id], remove);
+    if (own(config, key)) set([key], config[key]);
+  }
+  return output;
+}
+function ompModels(text, value) {
+  const document = parseDocument(text, { uniqueKeys: true });
+  if (document.errors.length || document.anchors?.size) fail('oh-my-pi: некорректный YAML; файл не изменён.');
+  let config;
+  try { config = document.toJS({ maxAliasCount: 0 }) ?? {}; }
+  catch { fail('oh-my-pi: YAML aliases не поддерживаются.'); }
+  const existing = Object.entries(config.providers ?? {}).filter(([, entry]) => wikiRoute(entry?.baseUrl));
+  if (existing.length > 1) fail('oh-my-pi: несколько маршрутов WikiVibe; автоматическое изменение неоднозначно.');
+  if (!existing.length) {
+    if (own(config.providers ?? {}, 'wikivibe')) fail('oh-my-pi: wikivibe указывает на другой endpoint; файл не изменён.');
+    return yamlSet(text, ['providers', 'wikivibe'], [`baseUrl: ${JSON.stringify(value.baseUrl)}`, `apiKey: ${JSON.stringify(value.apiKey)}`, 'api: openai-completions', 'auth: apiKey', 'models:', ...value.models.map(({ id }) => `  - id: ${JSON.stringify(id)}`)]);
+  }
+  const [id, entry] = existing[0];
+  if (!Array.isArray(entry.models ?? [])) fail('oh-my-pi: models должен быть массивом.');
+  const models = value.models.map(({ id: model }) => entry.models?.find(row => row.id === model) ?? { id: model });
+  // JSON flow entries are valid YAML; only this block is rewritten.
+  return yamlSet(text, ['providers', id, 'models'], [JSON.stringify(models)]);
+}
 // A deliberately small YAML editing surface, not a general-purpose YAML parser.
 // Traversed mappings must be block maps with plain keys and two-space indentation.
 // Unrelated blocks are kept byte-for-byte; aliases/anchors/tags/merge keys and
@@ -210,6 +261,7 @@ function codexCatalog(models) {
 }
 function render(agent, rel, bytes, value, root) {
   const text = bytes?.toString('utf8') ?? '';
+  if (agent.id === 'opencode') return openCodeConfig(text, value);
   if (agent.id === 'codex') {
     if (rel.endsWith('wikivibe-models.json')) {
       if (bytes !== null) fail('Codex: файл wikivibe-models.json уже существует и не принадлежит плагину.');
@@ -237,12 +289,7 @@ function render(agent, rel, bytes, value, root) {
   }
   if (agent.id === 'omp') {
     if (/\/config\.ya?ml$/.test(rel)) return addYamlAllowlist(text, value.models);
-    if (/(?:^|\n)\s*(?:wikivibe|["']wikivibe["']):/.test(text)) fail('Конфликт: поставщик wikivibe уже существует в YAML.');
-    const next = yamlSet(text, ['providers', 'wikivibe'], [
-      `baseUrl: ${JSON.stringify(value.baseUrl)}`, `apiKey: ${JSON.stringify(value.apiKey)}`,
-      'api: openai-completions', 'auth: apiKey', 'models:', ...value.models.map(({ id }) => `  - id: ${JSON.stringify(id)}`)
-    ]);
-    return next;
+    return ompModels(text, value);
   }
   const config = parseJSON(bytes);
   switch (agent.id) {
@@ -258,13 +305,6 @@ function render(agent, rel, bytes, value, root) {
       expandAllowlist(config, 'availableModels', value.models.map(({ id }) => id));
       env.ANTHROPIC_BASE_URL = value.baseUrl.slice(0, -3);
       env.ANTHROPIC_AUTH_TOKEN = value.apiKey;
-      break;
-    }
-    case 'opencode': {
-      const providers = child(config, 'provider');
-      provider(providers, 'wikivibe', { npm: '@ai-sdk/openai-compatible', name: 'WikiVibe', options: { baseURL: value.baseUrl, apiKey: value.apiKey }, models: Object.fromEntries(value.models.map(({ id }) => [id, { name: id }])) });
-      expandAllowlist(config, 'enabled_providers', ['wikivibe']);
-      expandAllowlist(config, 'disabled_providers', ['wikivibe'], true);
       break;
     }
     case 'pi':
@@ -293,7 +333,7 @@ function warnings(agents) {
   return [
     'Ключ будет записан открытым текстом в конфигурацию выбранных агентов. Резервные копии могут содержать прежние ключи и другие секреты. Права файлов — 0600, каталога копий — 0700.',
     'Плагин меняет только стандартные файлы в локальном домашнем каталоге; настройки действуют для новых сессий. Настройки проекта, переменные окружения, параметры запуска, управляемые настройки и выбранный профиль Orca (CLAUDE_CONFIG_DIR/CODEX_HOME) могут переопределить их. SSH и WSL не настраиваются. Установка агента не проверяется.',
-    'JSONC и сложные YAML/TOML не изменяются. Cursor, Windsurf, Antigravity и другие закрытые форматы исключены. Каждый файл изменяется отдельно: общей транзакции для всех файлов нет.',
+    'OpenCode JSONC сохраняет комментарии вне изменяемого каталога. Сложные YAML/TOML не изменяются. Cursor, Windsurf, Antigravity и закрытые форматы исключены. Каждый файл изменяется отдельно: общей транзакции для всех файлов нет.',
     'Каталог WikiVibe содержит только модели из авторизованного /models. Выбор модели остаётся в агенте; текущие модель и поставщик сохраняются. Старые настройки выбора, записанные самим плагином, возвращаются к исходным при обновлении.',
     'Существующие Claude availableModels, Pi/OMP enabledModels и OMP enabledProviders/OpenCode enabled_providers расширяются только моделями или поставщиком WikiVibe. Из OMP disabledProviders/OpenCode disabled_providers удаляется только wikivibe. Остальные ограничения сохраняются. Управляемые политики и настройки проекта не меняются и могут скрывать модели. Встроенные модели других поставщиков не означают доступ по ключу WikiVibe. Claude и Aider используют общий endpoint; выберите доступную модель внутри агента.',
     ...agents.map(agent => `${agent.label}: ${agent.protocol}. Каталог /models не подтверждает поддержку протокола, потоковых ответов, инструментов, контекстного окна или reasoning. ${agent.description}`)
@@ -385,7 +425,13 @@ function owned(current, record) {
   return record.original === null ? current === null : current?.hash === record.original.hash && current.mode === record.original.mode;
 }
 async function nativePaths(root, agent) {
-  if (agent.id === 'opencode' && await snapshot(root, path.join(root, '.config/opencode/opencode.jsonc'))) fail('OpenCode: найден opencode.jsonc в формате JSONC; автоматическое изменение исключено.');
+  if (agent.id === 'opencode') {
+    const jsonc = '.config/opencode/opencode.jsonc';
+    const a = await snapshot(root, path.join(root, agent.rel));
+    const b = await snapshot(root, path.join(root, jsonc));
+    if (a && b) fail('OpenCode: одновременно существуют opencode.json и opencode.jsonc; устраните неоднозначность.');
+    return [b ? jsonc : agent.rel];
+  }
   if (agent.id === 'codex') return [agent.rel, '.codex/wikivibe-models.json', '.codex/wikivibe.config.toml'];
   if (agent.id === 'aider') return [agent.rel, '.aider.model.metadata.json'];
   if (agent.id === 'pi') return [agent.rel, '.pi/agent/settings.json'];
@@ -405,7 +451,7 @@ async function plans(root, agents, value, restore = false) {
   const result = [];
   for (const agent of agents) {
     // Restore looks at both supported YAML spellings, independent of which exists now.
-    const rels = restore ? agent.id === 'omp' ? ['.omp/agent/models.yml', '.omp/agent/models.yaml', '.omp/agent/config.yml', '.omp/agent/config.yaml'] : agent.id === 'pi' ? [agent.rel, '.pi/agent/settings.json'] : agent.id === 'codex' ? [agent.rel, '.codex/wikivibe-models.json', '.codex/wikivibe.config.toml'] : agent.id === 'aider' ? [agent.rel, '.aider.model.metadata.json'] : [agent.rel] : await nativePaths(root, agent);
+    const rels = restore ? agent.id === 'opencode' ? [agent.rel, '.config/opencode/opencode.jsonc'] : agent.id === 'omp' ? ['.omp/agent/models.yml', '.omp/agent/models.yaml', '.omp/agent/config.yml', '.omp/agent/config.yaml'] : agent.id === 'pi' ? [agent.rel, '.pi/agent/settings.json'] : agent.id === 'codex' ? [agent.rel, '.codex/wikivibe-models.json', '.codex/wikivibe.config.toml'] : agent.id === 'aider' ? [agent.rel, '.aider.model.metadata.json'] : [agent.rel] : await nativePaths(root, agent);
     for (const rel of rels) {
       const target = path.join(root, rel);
       const current = await snapshot(root, target);
@@ -495,7 +541,7 @@ export async function applyAgents(agentIds, value, { home = homedir() } = {}) {
       await replace(root, location, Buffer.from(json(record)), saved);
       applied.push({ agentId: plan.agent.id, path: plan.target });
     }
-    return { applied, warnings: warnings(agents) };
+    return { applied, outcomes: agents.map(agent => ({ agentId: agent.id, modelCount: value.models.length, pickerVerified: false, nextStep: agent.id === 'codex' ? 'Откройте codex -p wikivibe, затем /model.' : `Откройте новую сессию и ${agent.id === 'opencode' ? '/models' : '/model'}.` })), warnings: warnings(agents) };
   });
 }
 export async function restoreAgents(agentIds, { home = homedir() } = {}) {

@@ -203,16 +203,46 @@ test('new config restore removes only plugin-created files', async () => {
   await assert.rejects(get(root, '.aider.model.metadata.json'), { code: 'ENOENT' });
 });
 
-test('refuses JSONC and malformed JSON without exposing key or mutating file', async () => {
+test('refuses malformed JSON without exposing key or mutating file', async () => {
   const root = await home();
-  const jsonc = '{\n  // comments are intentionally unsupported\n  "model": "old"\n}\n';
-  await put(root, '.config/opencode/opencode.jsonc', jsonc);
-  await reject(applyAgents(['opencode'], value, { home: root }), /JSONC/);
-  assert.equal(await get(root, '.config/opencode/opencode.jsonc'), jsonc);
   const malformed = '{"old":"unterminated}\n';
   await put(root, '.claude/settings.json', malformed);
   await reject(applyAgents(['claude'], value, { home: root }), /корректный JSON/);
   assert.equal(await get(root, '.claude/settings.json'), malformed);
+});
+
+test('synchronizes existing OpenCode JSONC provider without changing routing, selection or comments', async () => {
+  const root = await home();
+  const original = '{\n // user comment\n "model":"wikiwibe/old",\n "provider":{"wikiwibe":{"options":{"baseURL":"https://api.wikivibe.ru/v1","apiKey":"{file:key}"},"models":{"old":{},"wv-code-1":{"name":"Custom"}}}},\n}\n';
+  await put(root, '.config/opencode/opencode.jsonc', original);
+  await applyAgents(['opencode'], value, { home: root });
+  const { parse } = await import('jsonc-parser');
+  const changedText = await get(root, '.config/opencode/opencode.jsonc');
+  const changed = parse(changedText);
+  assert.equal(changed.model, 'wikiwibe/old');
+  assert.deepEqual(changed.provider.wikiwibe.options, { baseURL: 'https://api.wikivibe.ru/v1', apiKey: '{file:key}' });
+  assert.deepEqual(Object.keys(changed.provider.wikiwibe.models), value.models.map(row => row.id));
+  assert.equal(changed.provider.wikiwibe.models['wv-code-1'].name, 'Custom');
+  assert.ok(changedText.includes('// user comment'));
+  await reject(applyAgents(['opencode'], value, { home: root }).then(async () => {
+    await put(root, '.config/opencode/opencode.jsonc', changedText + '// later edit\n');
+    return restoreAgents(['opencode'], { home: root });
+  }), /конфликт/);
+});
+
+test('synchronizes existing OMP catalog and restores exact original credentials and bytes', async () => {
+  const root = await home();
+  const original = 'providers:\n  wikivibe:\n    baseUrl: https://api.wikivibe.ru/v1\n    apiKey: "!/usr/bin/cat /local/key"\n    api: openai-completions\n    models:\n      - id: old\n      - id: wv-code-1\n        contextWindow: 12345\n';
+  await put(root, '.omp/agent/models.yml', original);
+  await applyAgents(['omp'], value, { home: root });
+  const { parse } = await import('yaml');
+  const changed = parse(await get(root, '.omp/agent/models.yml'));
+  assert.equal(changed.providers.wikivibe.apiKey, '!/usr/bin/cat /local/key');
+  assert.equal(changed.providers.wikivibe.baseUrl, 'https://api.wikivibe.ru/v1');
+  assert.deepEqual(changed.providers.wikivibe.models.map(row => row.id), value.models.map(row => row.id));
+  assert.equal(changed.providers.wikivibe.models[0].contextWindow, 12345);
+  await restoreAgents(['omp'], { home: root });
+  assert.equal(await get(root, '.omp/agent/models.yml'), original);
 });
 
 test('backup and output permissions are restrictive', async () => {
@@ -376,7 +406,7 @@ test('catalog ownership conflicts preserve user files and prevent earlier writes
   for (const [id, rel, bytes] of cases) {
     const root = await home();
     await put(root, rel, bytes);
-    await reject(applyAgents([id], value, { home: root }), /существует|конфликт|используется|существуют/i);
+    await assert.rejects(applyAgents([id], value, { home: root }));
     assert.equal(await get(root, rel), bytes);
     if (rel !== '.codex/config.toml') await assert.rejects(get(root, '.codex/config.toml'), { code: 'ENOENT' });
     if (id === 'aider') await assert.rejects(get(root, '.aider.conf.yml'), { code: 'ENOENT' });

@@ -2,7 +2,7 @@ import { apiKey, endpoint, ENDPOINTS, REGISTRATION_URL, listModels } from './cli
 import { listAgents, previewAgents, applyAgents, restoreAgents } from './adapters.mjs';
 import { ConnectionError } from './connection-errors.mjs';
 
-export function createService(host, { home, fetchImpl = fetch } = {}) {
+export function createService(host, { home, fetchImpl = fetch, openRegistration } = {}) {
   let models = [];
   let modelsBase = '';
   let queue = Promise.resolve();
@@ -84,6 +84,9 @@ export function createService(host, { home, fetchImpl = fetch } = {}) {
         if (body.confirmed !== true) throw new Error('Подтвердите восстановление файлов агентов из резервных копий.');
         return restoreAgents(body.agentIds, options);
       }
+      case 'register':
+        if (!openRegistration) throw new Error('Откройте регистрацию командой WikiVibe в Orca.');
+        return openRegistration();
       case 'disconnect':
         await host.call('secrets.delete', { key: 'apiKey' });
         models = [];
