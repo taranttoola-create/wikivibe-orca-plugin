@@ -123,14 +123,15 @@ test('OpenCode JSON preserves existing provider and uses OpenAI-compatible provi
   assert.equal(await get(root, '.config/opencode/opencode.json'), original);
 });
 
-test('Pi installs all models without touching defaults or enabledModels', async () => {
+test('Pi extends an existing scope without changing defaults and restores original bytes', async () => {
   const root = await home();
   const settings = '{\n  "theme": "dark",\n  "defaultProvider": "other",\n  "defaultModel": "other",\n  "enabledModels": ["other/*"],\n  "defaultThinkingLevel": "high"\n}\n';
   const models = '{\n  "providers": {"other": {"baseUrl": "https://other.invalid", "models": [{"id": "other"}]}},\n  "modelOverrides": {"other": {"reasoning": true}}\n}\n';
   await put(root, '.pi/agent/settings.json', settings);
   await put(root, '.pi/agent/models.json', models);
   await applyAgents(['pi'], value, { home: root });
-  assert.equal(await get(root, '.pi/agent/settings.json'), settings);
+  const changedSettings = JSON.parse(await get(root, '.pi/agent/settings.json'));
+  assert.deepEqual(changedSettings, { ...JSON.parse(settings), enabledModels: ['other/*', ...value.models.map(({ id }) => `wikivibe/${id}`)] });
   const changed = JSON.parse(await get(root, '.pi/agent/models.json'));
   assert.equal(changed.providers.other.baseUrl, 'https://other.invalid');
   assert.equal(changed.providers.wikivibe.api, 'openai-completions');
@@ -246,7 +247,7 @@ test('all seven adapters replace owned rosters, never inject public models, and 
   assert.ok(result.warnings.some(message => message.includes('availableModels') && message.includes('enabledModels')));
   const claude = JSON.parse(await get(root, '.claude/settings.json'));
   assert.deepEqual(claude.modelPicker.options.map(row => row.model), ['new-authorized']);
-  assert.deepEqual(claude.availableModels, ['user']);
+  assert.deepEqual(claude.availableModels, ['user', 'new-authorized']);
   assert.equal(claude.model, 'user');
   assert.deepEqual(JSON.parse(await get(root, '.codex/wikivibe-models.json')).models.map(row => row.slug), ['new-authorized']);
   assert.deepEqual(Object.keys(JSON.parse(await get(root, '.config/opencode/opencode.json')).provider.wikivibe.models), ['new-authorized']);
@@ -260,7 +261,8 @@ test('all seven adapters replace owned rosters, never inject public models, and 
   assert.equal(qwen.env.WIKIVIBE_API_KEY, refreshed.apiKey);
   assert.equal(qwen.model.name, 'user');
   assert.equal(qwen.security.auth.selectedType, 'anthropic');
-  for (const rel of ['.pi/agent/settings.json', '.omp/agent/config.yml']) assert.equal(await get(root, rel), originals[rel]);
+  assert.deepEqual(JSON.parse(await get(root, '.pi/agent/settings.json')), { ...JSON.parse(originals['.pi/agent/settings.json']), enabledModels: ['other/*', 'wikivibe/new-authorized'] });
+  assert.equal(await get(root, '.omp/agent/config.yml'), originals['.omp/agent/config.yml']);
   await restoreAgents(ids, { home: root });
   for (const [rel, bytes] of Object.entries(originals)) assert.equal(await get(root, rel), bytes);
   for (const rel of ['.codex/wikivibe-models.json', '.codex/wikivibe.config.toml', '.pi/agent/models.json', '.omp/agent/models.yml']) await assert.rejects(get(root, rel), { code: 'ENOENT' });
@@ -274,6 +276,88 @@ test('rejects invalid or unavailable catalog entries without any writes', async 
   }
   await reject(applyAgents(['opencode'], { baseUrl: endpoint, apiKey: value.apiKey, model: 'legacy-single' }, { home: root }), /каталог/);
   await assert.rejects(get(root, '.config/opencode/opencode.json'), { code: 'ENOENT' });
+});
+
+test('existing filters admit all 14 authorized models, preserve user entries, and refresh without stale additions', async () => {
+  const root = await home();
+  const roster = { ...value, models: Array.from({ length: 14 }, (_, i) => ({ id: `vendor/allowed-${i}` })) };
+  const originals = {
+    '.claude/settings.json': '{"model":"user","availableModels":["user","vendor/allowed-0"]}\n',
+    '.config/opencode/opencode.json': '{"model":"other/user","enabled_providers":["other"],"disabled_providers":["wikivibe","blocked"]}\n',
+    '.pi/agent/settings.json': '{"defaultProvider":"other","defaultModel":"user","enabledModels":["other/*","wikivibe/vendor/allowed-0"]}\n',
+    '.omp/agent/config.yaml': '# keep\nmodelRoles:\n  default: other/user\nenabledModels:\n  - other/* # keep entry\n  - "wikivibe/vendor/allowed-0"\nenabledProviders: [other]\ndisabledProviders:\n  - wikivibe\n  - blocked\n'
+  };
+  for (const [rel, bytes] of Object.entries(originals)) await put(root, rel, bytes);
+  const ids = ['claude', 'opencode', 'pi', 'omp'];
+  await applyAgents(ids, roster, { home: root });
+  const rawIds = roster.models.map(({ id }) => id);
+  const qualified = rawIds.map(id => `wikivibe/${id}`);
+  const claude = JSON.parse(await get(root, '.claude/settings.json'));
+  assert.deepEqual(claude.availableModels, ['user', ...rawIds]);
+  assert.equal(claude.model, 'user');
+  const open = JSON.parse(await get(root, '.config/opencode/opencode.json'));
+  assert.deepEqual(open.enabled_providers, ['other', 'wikivibe']);
+  assert.deepEqual(open.disabled_providers, ['blocked']);
+  assert.equal(open.model, 'other/user');
+  const pi = JSON.parse(await get(root, '.pi/agent/settings.json'));
+  assert.deepEqual(pi.enabledModels, ['other/*', ...qualified]);
+  assert.equal(pi.defaultProvider, 'other');
+  assert.equal(pi.defaultModel, 'user');
+  const omp = await get(root, '.omp/agent/config.yaml');
+  assert.deepEqual(JSON.parse(omp.match(/^enabledModels: (.+)$/m)[1]), ['other/*', ...qualified]);
+  assert.deepEqual(JSON.parse(omp.match(/^enabledProviders: (.+)$/m)[1]), ['other', 'wikivibe']);
+  assert.deepEqual(JSON.parse(omp.match(/^disabledProviders: (.+)$/m)[1]), ['blocked']);
+  assert.match(omp, /# keep\nmodelRoles:\n  default: other\/user\n/);
+  await applyAgents(ids, { ...value, models: [{ id: 'new' }] }, { home: root });
+  assert.deepEqual(JSON.parse(await get(root, '.claude/settings.json')).availableModels, ['user', 'vendor/allowed-0', 'new']);
+  assert.deepEqual(JSON.parse(await get(root, '.pi/agent/settings.json')).enabledModels, ['other/*', 'wikivibe/vendor/allowed-0', 'wikivibe/new']);
+  assert.deepEqual(JSON.parse((await get(root, '.omp/agent/config.yaml')).match(/^enabledModels: (.+)$/m)[1]), ['other/*', 'wikivibe/vendor/allowed-0', 'wikivibe/new']);
+  await restoreAgents(ids, { home: root });
+  for (const [rel, bytes] of Object.entries(originals)) assert.equal(await get(root, rel), bytes);
+});
+
+test('filter files retain conflict protection and prevent earlier writes', async () => {
+  for (const [id, rel, original, modelRel] of [
+    ['pi', '.pi/agent/settings.json', '{"enabledModels":["other/*"]}\n', '.pi/agent/models.json'],
+    ['omp', '.omp/agent/config.yml', 'enabledModels:\n  - other/*\n', '.omp/agent/models.yml']
+  ]) {
+    const root = await home();
+    await put(root, rel, original);
+    await applyAgents([id], value, { home: root });
+    const models = await get(root, modelRel);
+    const edited = `${await get(root, rel)}\n`;
+    await writeFile(path.join(root, rel), edited);
+    await reject(applyAgents([id], { ...value, models: [{ id: 'new' }] }, { home: root }), /конфликт/i);
+    await reject(restoreAgents([id], { home: root }), /конфликт/i);
+    assert.equal(await get(root, rel), edited);
+    assert.equal(await get(root, modelRel), models);
+  }
+});
+
+test('ambiguous filters refuse the whole plan instead of dropping restrictions', async () => {
+  for (const [id, rel, bytes, modelRel] of [
+    ['claude', '.claude/settings.json', '{"availableModels":"user"}\n', '.pi/agent/models.json'],
+    ['opencode', '.config/opencode/opencode.json', '{"disabled_providers":[null]}\n', '.pi/agent/models.json'],
+    ['pi', '.pi/agent/settings.json', '{"enabledModels":{}}\n', '.pi/agent/models.json'],
+    ['omp', '.omp/agent/config.yml', 'enabledModels:\n  - other/*\n  - path: ~/work\n    models:\n      - other/model\n', '.omp/agent/models.yml'],
+    ['omp', '.omp/agent/config.yml', 'enabledModels:\n  - other/*\nenabledModels: []\n', '.omp/agent/models.yml']
+  ]) {
+    const root = await home();
+    await put(root, rel, bytes);
+    await assert.rejects(applyAgents([id], value, { home: root }));
+    assert.equal(await get(root, rel), bytes);
+    await assert.rejects(get(root, modelRel), { code: 'ENOENT' });
+  }
+});
+
+test('OMP empty provider and model scopes stay unrestricted and single disabled WikiVibe becomes an empty list', async () => {
+  const root = await home();
+  const original = 'enabledModels: []\nenabledProviders: []\ndisabledProviders: [wikivibe]\n';
+  await put(root, '.omp/agent/config.yml', original);
+  await applyAgents(['omp'], value, { home: root });
+  assert.equal(await get(root, '.omp/agent/config.yml'), 'enabledModels: []\nenabledProviders: []\ndisabledProviders: []\n');
+  await restoreAgents(['omp'], { home: root });
+  assert.equal(await get(root, '.omp/agent/config.yml'), original);
 });
 
 test('catalog ownership conflicts preserve user files and prevent earlier writes in the same plan', async () => {

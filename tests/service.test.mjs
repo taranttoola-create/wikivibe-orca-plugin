@@ -120,7 +120,6 @@ test('apply refreshes revoked and newly available models and preserves active se
   });
   const opencode = await configFile(home, '.config/opencode/opencode.json', { model: 'other/active', provider: { other: { name: 'Other' } } });
   const piSettings = await configFile(home, '.pi/agent/settings.json', { defaultProvider: 'other', defaultModel: 'active', enabledModels: ['other/active'] });
-  const beforePi = await readFile(piSettings, 'utf8');
   await service.request('connect', { apiKey: 'fixture', baseUrl: ENDPOINTS[0] });
   await service.request('apply', { agentIds: ['opencode', 'pi'], confirmed: true });
   roster = ['retained', 'new-b', 'new-a'];
@@ -138,7 +137,7 @@ test('apply refreshes revoked and newly available models and preserves active se
   assert.deepEqual(openConfig.provider.other, { name: 'Other' });
   const piConfig = JSON.parse(await readFile(join(home, '.pi/agent/models.json'), 'utf8'));
   assert.deepEqual(piConfig.providers.wikivibe.models.map(model => model.id), ['new-c', 'retained']);
-  assert.equal(await readFile(piSettings, 'utf8'), beforePi);
+  assert.deepEqual(JSON.parse(await readFile(piSettings, 'utf8')), { defaultProvider: 'other', defaultModel: 'active', enabledModels: ['other/active', 'wikivibe/new-c', 'wikivibe/retained'] });
   assert.deepEqual(stores.storage.get('preferences'), { baseUrl: ENDPOINTS[0] });
 });
 

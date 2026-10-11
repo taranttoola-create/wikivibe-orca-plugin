@@ -24,8 +24,8 @@ const AGENTS = [
   { id: 'claude', label: 'Claude Code', rel: '.claude/settings.json', protocol: 'Anthropic Messages', description: 'В ~/.claude/settings.json: env.ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN и полный modelPicker (Claude Code ≥ 2.1.242). Отдельный поставщик WikiVibe не поддерживается: шлюз заменяет Anthropic endpoint. Текущая модель не меняется; выбор через /model.' },
   { id: 'codex', label: 'Codex', rel: '.codex/config.toml', protocol: 'OpenAI Responses', description: 'Регистрация model_providers.wikivibe в ~/.codex/config.toml; ~/.codex/wikivibe.config.toml и wikivibe-models.json — отдельный полный каталог. Пользователь включает профиль штатно: codex -p wikivibe, затем /model. Базовые model/model_provider не меняются. Нужна версия с профильными файлами и model_catalog_json; Desktop/Orca picker не гарантируется.' },
   { id: 'opencode', label: 'OpenCode', rel: '.config/opencode/opencode.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.config/opencode/opencode.json: provider.wikivibe с options.baseURL, options.apiKey и всеми models через @ai-sdk/openai-compatible. Текущая model не меняется; выбор через /models. JSONC не изменяется.' },
-  { id: 'pi', label: 'Pi', rel: '.pi/agent/models.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.pi/agent/models.json: providers.wikivibe с baseUrl, apiKey, api = openai-completions и всеми models. settings.json/defaultProvider/defaultModel не меняются; выбор через /model.' },
-  { id: 'omp', label: 'oh-my-pi', rel: '.omp/agent/models.yml', protocol: 'OpenAI Chat Completions', description: 'В ~/.omp/agent/models.yml: providers.wikivibe с baseUrl, apiKey, api = openai-completions и всеми models. Поддерживается .yaml и простой YAML. config.yml/modelRoles не меняются; выбор через /model.' },
+  { id: 'pi', label: 'Pi', rel: '.pi/agent/models.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.pi/agent/models.json: providers.wikivibe с baseUrl, apiKey, api = openai-completions и всеми models. Существующий settings.json/enabledModels расширяется ID wikivibe/<id>; defaultProvider/defaultModel не меняются. Выбор через /model.' },
+  { id: 'omp', label: 'oh-my-pi', rel: '.omp/agent/models.yml', protocol: 'OpenAI Chat Completions', description: 'В ~/.omp/agent/models.yml: providers.wikivibe с baseUrl, apiKey, api = openai-completions и всеми models. Поддерживается .yaml и простой YAML. Фильтры config.yml расширяются только для WikiVibe; modelRoles не меняются. Выбор через /model.' },
   { id: 'aider', label: 'Aider', rel: '.aider.conf.yml', protocol: 'OpenAI Chat Completions', description: 'В ~/.aider.conf.yml: openai-api-base и openai-api-key; ~/.aider.model.metadata.json регистрирует весь каталог для /models. Отдельного поставщика WikiVibe нет: используется openai/<id>, общий OpenAI endpoint заменяется. Текущая model не меняется; выбор через /model openai/<id>. /models также показывает встроенные модели LiteLLM, не подтверждённые ключом; лимиты и цены неизвестны.' },
   { id: 'qwen', label: 'Qwen Code', rel: '.qwen/settings.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.qwen/settings.json: все доступные modelProviders.openai с меткой WikiVibe и env.WIKIVIBE_API_KEY. WikiVibe — метка в группе протокола OpenAI, не отдельный тип auth. Текущие model.name/security.auth не меняются; при необходимости /auth, затем /model.' }
 ];
@@ -57,6 +57,13 @@ function parseJSON(bytes) {
   catch { fail('Поддерживается только корректный JSON без комментариев; файл не изменён.'); }
   if (!object(result)) fail('Корень конфигурации должен быть объектом JSON.');
   return result;
+}
+function expandAllowlist(config, key, values, remove = false) {
+  if (!own(config, key)) return;
+  const entries = config[key];
+  if (!Array.isArray(entries) || entries.some(item => typeof item !== 'string')) fail(`Поле ${key} должно быть списком строк; файл не изменён.`);
+  if (remove) config[key] = entries.filter(item => !values.includes(item));
+  else config[key] = [...entries, ...values.filter(item => !entries.includes(item))];
 }
 function provider(parent, key, value) {
   if (own(parent, key)) fail('Конфликт: поставщик wikivibe уже существует и не принадлежит плагину.');
@@ -110,6 +117,60 @@ function yamlSet(text, keys, replacement) {
   }
   update(0, lines.length, 0, 0);
   return `${lines.join(newline)}${newline}`;
+}
+function yamlScalar(value) {
+  const text = value.trim();
+  if (text.startsWith('"')) {
+    const quoted = text.match(/^"(?:[^"\\]|\\.)*"(?=\s*(?:#.*)?$)/)?.[0];
+    try { if (quoted) return JSON.parse(quoted); } catch {}
+    fail('Сложный YAML со списком моделей не изменяется.');
+  }
+  if (text.startsWith("'")) {
+    const quoted = text.match(/^'(?:[^']|'')*'(?=\s*(?:#.*)?$)/)?.[0];
+    if (quoted) return quoted.slice(1, -1).replaceAll("''", "'");
+    fail('Сложный YAML со списком моделей не изменяется.');
+  }
+  const plain = text.replace(/\s+#.*$/, '').trim();
+  if (!plain || /[{}[\],]|:\s/.test(plain) || /^(?:null|true|false|~|[-+]?\d+(?:\.\d+)?)$/i.test(plain)) fail('Сложный YAML со списком моделей не изменяется.');
+  return plain;
+}
+function yamlList(text, key) {
+  const lines = text.split(/\r?\n/);
+  const match = new RegExp(`^${key}:\\s*(.*)$`);
+  const matches = lines.flatMap((line, index) => match.test(line) ? [index] : []);
+  if (!matches.length) return null;
+  if (matches.length !== 1) fail('Ключ конфигурации повторяется; файл не изменён.');
+  const at = matches[0];
+  const inline = lines[at].match(match)[1].trim().replace(/\s+#.*$/, '').trim();
+  if (inline && !inline.startsWith('#')) {
+    if (!inline.startsWith('[') || !inline.endsWith(']')) fail(`YAML ${key} должен быть простым списком.`);
+    try { const value = JSON.parse(inline); if (Array.isArray(value) && value.every(item => typeof item === 'string')) return value; } catch {}
+    const body = inline.slice(1, -1).trim();
+    if (/["']/.test(body)) fail(`YAML ${key}: сложный inline список не изменяется.`);
+    return body ? body.split(',').map(yamlScalar) : [];
+  }
+  const result = [];
+  for (let i = at + 1; i < lines.length; i++) {
+    if (!lines[i].trim() || lines[i].trimStart().startsWith('#')) continue;
+    if (/^\S/.test(lines[i]) && !lines[i].startsWith('-')) break;
+    if (!/^  -\s+/.test(lines[i])) fail(`YAML ${key}: сложные или path-scoped списки не изменяются.`);
+    result.push(yamlScalar(lines[i].replace(/^  -\s+/, '')));
+  }
+  return result;
+}
+function addYamlAllowlist(text, models) {
+  let next = text;
+  for (const [key, values, remove] of [
+    ['enabledModels', models.map(({ id }) => `wikivibe/${id}`), false],
+    ['enabledProviders', ['wikivibe'], false],
+    ['disabledProviders', ['wikivibe'], true]
+  ]) {
+    const entries = yamlList(next, key);
+    if (entries === null || (!remove && entries.length === 0)) continue;
+    const merged = remove ? entries.filter(item => !values.includes(item)) : [...entries, ...values.filter(item => !entries.includes(item))];
+    if (JSON.stringify(merged) !== JSON.stringify(entries)) next = yamlSet(next, [key], [JSON.stringify(merged)]);
+  }
+  return next;
 }
 function tomlConfig(text, value) {
   if (text.includes('"""') || text.includes("'''")) fail('Многострочные строки TOML не изменяются автоматически.');
@@ -175,11 +236,13 @@ function render(agent, rel, bytes, value, root) {
     return next;
   }
   if (agent.id === 'omp') {
+    if (/\/config\.ya?ml$/.test(rel)) return addYamlAllowlist(text, value.models);
     if (/(?:^|\n)\s*(?:wikivibe|["']wikivibe["']):/.test(text)) fail('Конфликт: поставщик wikivibe уже существует в YAML.');
-    return yamlSet(text, ['providers', 'wikivibe'], [
+    const next = yamlSet(text, ['providers', 'wikivibe'], [
       `baseUrl: ${JSON.stringify(value.baseUrl)}`, `apiKey: ${JSON.stringify(value.apiKey)}`,
       'api: openai-completions', 'auth: apiKey', 'models:', ...value.models.map(({ id }) => `  - id: ${JSON.stringify(id)}`)
     ]);
+    return next;
   }
   const config = parseJSON(bytes);
   switch (agent.id) {
@@ -192,6 +255,7 @@ function render(agent, rel, bytes, value, root) {
       if (options.some(row => value.models.some(model => model.id === row.model))) fail('Claude Code: модель уже существует в пользовательском modelPicker.');
       picker.options = [...options, ...value.models.map(({ id }) => ({ model: id, label: `WikiVibe · ${id}` }))];
       picker.replaceBuiltInOptions = true;
+      expandAllowlist(config, 'availableModels', value.models.map(({ id }) => id));
       env.ANTHROPIC_BASE_URL = value.baseUrl.slice(0, -3);
       env.ANTHROPIC_AUTH_TOKEN = value.apiKey;
       break;
@@ -199,12 +263,16 @@ function render(agent, rel, bytes, value, root) {
     case 'opencode': {
       const providers = child(config, 'provider');
       provider(providers, 'wikivibe', { npm: '@ai-sdk/openai-compatible', name: 'WikiVibe', options: { baseURL: value.baseUrl, apiKey: value.apiKey }, models: Object.fromEntries(value.models.map(({ id }) => [id, { name: id }])) });
-      if (own(config, 'enabled_providers') && (!Array.isArray(config.enabled_providers) || !config.enabled_providers.includes('wikivibe'))) fail('OpenCode: enabled_providers исключает wikivibe.');
-      if (Array.isArray(config.disabled_providers) && config.disabled_providers.includes('wikivibe')) fail('OpenCode: поставщик wikivibe отключён через disabled_providers.');
+      expandAllowlist(config, 'enabled_providers', ['wikivibe']);
+      expandAllowlist(config, 'disabled_providers', ['wikivibe'], true);
       break;
     }
     case 'pi':
-      provider(child(config, 'providers'), 'wikivibe', { baseUrl: value.baseUrl, api: 'openai-completions', apiKey: value.apiKey, models: value.models.map(({ id }) => ({ id })) });
+      if (rel.endsWith('settings.json')) {
+        expandAllowlist(config, 'enabledModels', value.models.map(({ id }) => `wikivibe/${id}`));
+      } else {
+        provider(child(config, 'providers'), 'wikivibe', { baseUrl: value.baseUrl, api: 'openai-completions', apiKey: value.apiKey, models: value.models.map(({ id }) => ({ id })) });
+      }
       break;
     case 'qwen': {
       const providers = child(config, 'modelProviders');
@@ -227,7 +295,7 @@ function warnings(agents) {
     'Плагин меняет только стандартные файлы в локальном домашнем каталоге; настройки действуют для новых сессий. Настройки проекта, переменные окружения, параметры запуска, управляемые настройки и выбранный профиль Orca (CLAUDE_CONFIG_DIR/CODEX_HOME) могут переопределить их. SSH и WSL не настраиваются. Установка агента не проверяется.',
     'JSONC и сложные YAML/TOML не изменяются. Cursor, Windsurf, Antigravity и другие закрытые форматы исключены. Каждый файл изменяется отдельно: общей транзакции для всех файлов нет.',
     'Каталог WikiVibe содержит только модели из авторизованного /models. Выбор модели остаётся в агенте; текущие модель и поставщик сохраняются. Старые настройки выбора, записанные самим плагином, возвращаются к исходным при обновлении.',
-    'Пользовательские ограничения Claude availableModels, Pi enabledModels, OMP enabledModels/enabledProviders и управляемые политики не расширяются: они могут скрыть часть импортированного каталога. Встроенные модели других поставщиков не удаляются; их видимость не означает доступ по ключу WikiVibe. Claude и Aider используют общий endpoint своего протокола; сохранённая текущая модель может отсутствовать у шлюза — выберите доступную модель внутри агента.',
+    'Существующие Claude availableModels, Pi/OMP enabledModels и OMP enabledProviders/OpenCode enabled_providers расширяются только моделями или поставщиком WikiVibe. Из OMP disabledProviders/OpenCode disabled_providers удаляется только wikivibe. Остальные ограничения сохраняются. Управляемые политики и настройки проекта не меняются и могут скрывать модели. Встроенные модели других поставщиков не означают доступ по ключу WikiVibe. Claude и Aider используют общий endpoint; выберите доступную модель внутри агента.',
     ...agents.map(agent => `${agent.label}: ${agent.protocol}. Каталог /models не подтверждает поддержку протокола, потоковых ответов, инструментов, контекстного окна или reasoning. ${agent.description}`)
   ];
 }
@@ -320,7 +388,7 @@ async function nativePaths(root, agent) {
   if (agent.id === 'opencode' && await snapshot(root, path.join(root, '.config/opencode/opencode.jsonc'))) fail('OpenCode: найден opencode.jsonc в формате JSONC; автоматическое изменение исключено.');
   if (agent.id === 'codex') return [agent.rel, '.codex/wikivibe-models.json', '.codex/wikivibe.config.toml'];
   if (agent.id === 'aider') return [agent.rel, '.aider.model.metadata.json'];
-  if (agent.id === 'pi') return [agent.rel, '.pi/agent/settings.json']; // old plugin-owned defaults only
+  if (agent.id === 'pi') return [agent.rel, '.pi/agent/settings.json'];
   if (agent.id !== 'omp') return [agent.rel];
   const result = [];
   for (const name of ['models', 'config']) {
@@ -345,15 +413,18 @@ async function plans(root, agents, value, restore = false) {
       if (backup && !owned(current, backup.record)) fail(`${agent.label}: конфликт с изменениями после применения. Восстановление и перезапись запрещены; ваши изменения сохранены.`);
       if (restore) { if (backup) result.push({ agent, rel, target, current, backup }); continue; }
       if (backup && backup.record.state !== 'active') fail('Незавершённая операция: сначала восстановите конфигурацию.');
-      const obsolete = agent.id === 'pi' && rel.endsWith('settings.json') || agent.id === 'omp' && /\/config\.ya?ml$/.test(rel);
-      if (obsolete) { if (backup) result.push({ agent, rel, target, current, backup, cleanup: true }); continue; }
+      const filters = agent.id === 'pi' && rel.endsWith('settings.json') || agent.id === 'omp' && /\/config\.ya?ml$/.test(rel);
       // Owned files cannot have later edits (checked above), so regenerating from
       // the original safely removes every stale plugin model and legacy default.
       const baseline = backup ? backup.record.original === null ? null : Buffer.from(backup.record.original.base64, 'base64') : current?.bytes ?? null;
+      if (filters) {
+        const hasFilters = agent.id === 'pi' ? own(parseJSON(baseline), 'enabledModels') : ['enabledModels', 'enabledProviders', 'disabledProviders'].some(key => yamlList(baseline?.toString('utf8') ?? '', key) !== null);
+        if (!hasFilters) { if (backup) result.push({ agent, rel, target, current, backup, cleanup: true }); continue; }
+      }
       const bytes = Buffer.from(render(agent, rel, baseline, value, root));
       const backupDir = path.dirname(backupPath(root, target));
       if (await directories(root, backupDir) && (await fs.lstat(backupDir)).mode % 512 !== 0o700) fail('Каталог резервных копий должен иметь права 0700.');
-      result.push({ agent, rel, target, current, backup, bytes });
+      result.push({ agent, rel, target, current, backup, bytes, filters });
     }
   }
   return result;
@@ -401,7 +472,7 @@ export async function previewAgents(agentIds, value, { home = homedir() } = {}) 
   const agents = selected(agentIds); preferences(value);
   const root = await homeRoot(home);
   const changes = await plans(root, agents, { ...value, apiKey: 'preview-redacted' });
-  return { changes: changes.map(plan => ({ agentId: plan.agent.id, path: plan.target, description: `${plan.agent.label}: ${plan.cleanup ? 'восстановление прежних настроек выбора' : 'установка полного доступного каталога'}, ${plan.agent.protocol}. Плагин сохранит резервную копию. Восстановление доступно, только если файл не изменится после применения.`, secretOnDisk: !plan.cleanup && !plan.rel.endsWith('wikivibe-models.json') && !plan.rel.endsWith('wikivibe.config.toml') && !plan.rel.endsWith('.metadata.json') })), warnings: warnings(agents) };
+  return { changes: changes.map(plan => ({ agentId: plan.agent.id, path: plan.target, description: `${plan.agent.label}: ${plan.cleanup ? 'восстановление прежних настроек выбора' : plan.filters ? 'расширение фильтров только для WikiVibe' : 'установка полного доступного каталога'}, ${plan.agent.protocol}. Плагин сохранит резервную копию. Восстановление доступно, только если файл не изменится после применения.`, secretOnDisk: !plan.cleanup && !plan.filters && !plan.rel.endsWith('wikivibe-models.json') && !plan.rel.endsWith('wikivibe.config.toml') && !plan.rel.endsWith('.metadata.json') })), warnings: warnings(agents) };
 }
 export async function applyAgents(agentIds, value, { home = homedir() } = {}) {
   const agents = selected(agentIds); preferences(value, true);

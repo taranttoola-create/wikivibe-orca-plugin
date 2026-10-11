@@ -1,4 +1,4 @@
-import { mkdtemp, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, rm, realpath, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile, spawn } from 'node:child_process';
@@ -14,7 +14,14 @@ const env = { PATH: process.env.PATH, HOME: home, XDG_CONFIG_HOME: join(home, '.
 const execute = promisify(execFile);
 let server;
 try {
-  const ids = ['wikivibe-smoke-model', 'wikivibe-other-model'];
+  const ids = Array.from({ length: 14 }, (_, i) => `wikivibe-smoke-model-${i}`);
+  if (agent === 'opencode') {
+    await mkdir(join(home, '.config/opencode'), { recursive: true });
+    await writeFile(join(home, '.config/opencode/opencode.json'), JSON.stringify({ enabled_providers: ['other'], disabled_providers: ['wikivibe', 'blocked'] }));
+  } else {
+    await mkdir(join(home, '.omp/agent'), { recursive: true });
+    await writeFile(join(home, '.omp/agent/config.yml'), 'enabledModels:\n  - other/*\nenabledProviders:\n  - other\ndisabledProviders:\n  - wikivibe\n  - blocked\n');
+  }
   await applyAgents([agent], { apiKey: 'smoke-fixture-credential', baseUrl: 'https://api.wikivibe.dev/v1', models: ids.map(id => ({ id })) }, { home });
   const { stdout: version } = await execute(binary, ['--version'], { env, cwd: home, timeout: 15000 });
   if (agent === 'opencode' && /(?:^|\s)v?2\./.test(version)) {
@@ -50,7 +57,7 @@ try {
     const { stdout, stderr } = await execute(binary, args, { cwd: home, env, timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
     for (const id of ids) assert.ok((stdout + stderr).includes(id), `CLI did not expose imported model: ${id}`);
   }
-  console.log(`Установленный ${agent} показал обе модели провайдера WikiVibe во временном HOME без назначения модели по умолчанию. Запрос к модели не выполнялся.`);
+  console.log(`Установленный ${agent} показал все ${ids.length} моделей WikiVibe во временном HOME с исходными ограничениями. Запрос к модели не выполнялся.`);
   if (server) { const exited = once(server, 'exit'); server.kill(); await exited; server = undefined; }
   await restoreAgents([agent], { home });
 } finally {
