@@ -1,6 +1,6 @@
 # WikiVibe Gateway для Orca
 
-![WikiVibe Gateway — иллюстрация проекта](assets/hero-banner.png)
+![WikiVibe Gateway — ключ, шлюз и локальные CLI-агенты](assets/gateway-banner.png)
 
 WikiVibe Gateway — самостоятельный плагин Orca для подключения провайдера WikiVibe к поддерживаемым CLI-агентам. Он проверяет API-ключ, загружает все доступные этому ключу модели и после предварительного просмотра и вашего согласия записывает провайдера, каталог и ключ в нативные конфигурации. Модель выбирается в самом агенте, а не в защищённой настройке. Форк Orca и изменение её параметров запуска не нужны.
 
@@ -8,7 +8,10 @@ WikiVibe Gateway — самостоятельный плагин Orca для п�
 
 ## Визуалы проекта
 
-Сгенерированные в OMP иллюстрации сохранены в [`assets/`](assets/). Это концепт-арт, не скриншоты работающего плагина и не техническая документация его архитектуры. Используемый в плагине логотип WikiVibe не заменён.
+Иллюстрации сохранены в [`assets/`](assets/). Новый баннер и визуал настройки сгенерированы моделью `gpt-image-2.5` через WikiVibe `/v1/responses` и записаны непосредственно в репозиторий. Ранее созданные оригиналы взяты из OMP-сессии `01a12b4e-ee58-751d-8721-98044dd8cbb2`. Это концепт-арт, не скриншоты работающего плагина и не техническая документация его архитектуры. Используемый в плагине логотип WikiVibe не заменён.
+
+![Проверка ключа, каталог, просмотр изменений и настройка CLI — иллюстрация процесса](assets/setup-flow.png)
+
 
 <details>
 <summary>Галерея: обзор, схема и концепт интерфейса</summary>
@@ -27,7 +30,7 @@ WikiVibe Gateway — самостоятельный плагин Orca для п�
 
 </details>
 
-Дополнительные оригиналы: [квадратная иконка проекта](assets/project-icon.png) и [концепт favicon](assets/favicon-concept.png). Концепт favicon сохранён в исходном размере; как browser favicon он пока не подключён.
+Дополнительные оригиналы: [прежний баннер](assets/hero-banner.png), [квадратная иконка проекта](assets/project-icon.png) и [концепт favicon](assets/favicon-concept.png). Концепт favicon сохранён в исходном размере; как browser favicon он пока не подключён.
 
 
 ## Установка
@@ -111,9 +114,9 @@ https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.1.8
 | Aider | `.aider.conf.yml`: endpoint/key; `.aider.model.metadata.json`: все ID с `openai/`; `/models` и `/model openai/<id>` | OpenAI Chat Completions. Именованного WikiVibe provider picker нет; endpoint перенаправляет OpenAI transport. |
 | Qwen Code | `.qwen/settings.json`: все модели в `modelProviders.openai`, env.WIKIVIBE_API_KEY; `/model` | OpenAI Chat Completions. WikiVibe отображается именами моделей внутри группы OpenAI, не отдельной группой протокола. |
 
-Все 14 тестовых моделей подтверждены установленными OpenCode и oh-my-pi во временном HOME с исходными allowlist и запретом WikiVibe. Codex app-server ранее вернул две модели через `model/list` с provider/catalog overrides, эквивалентными файлу профиля; запуск профиля через TUI отдельно не проверялся. Для Claude Code, Pi, Aider и Qwen проверены файлы и контракты в тестах, не реальный запуск этих CLI. Платные запросы к моделям и успешная генерация через WikiVibe не проверялись.
+Все 14 тестовых моделей подтверждены установленными OpenCode и oh-my-pi во временном HOME с исходными allowlist и запретом WikiVibe. Codex app-server ранее вернул две модели через `model/list` с provider/catalog overrides, эквивалентными файлу профиля; запуск профиля через TUI отдельно не проверялся. Для Claude Code, Pi, Aider и Qwen проверены файлы и контракты в тестах, не реальный запуск этих CLI. Coding inference не проверялся. Отдельный прямой запрос `gpt-image-2.5` к WikiVibe Responses успешно вернул PNG-изображения для этого README; это не проверка всех моделей или coding tools.
 
-В 1.1.7 каталог OpenCode был ограничен доступом прежнего native credential (10 моделей). Начиная с 1.1.8 применение заменяет именно WikiVibe endpoint/key настройками плагина: authenticated `/models` этого маршрута содержит 15 ID, включая DeepSeek/Gemini/GLM. Реальные OpenCode2 и OMP прочитали все 15; OpenCode2 подтвердил per-model SDK и image output, OMP RPC выбрал `gpt-image-2.5` с `api: openai-responses` и без tools. Другие провайдеры и активные defaults сохранены. Native listing и выбор transport не доказывают успешную генерацию; live inference не выполнялся.
+В 1.1.7 каталог OpenCode был ограничен доступом прежнего native credential (10 моделей). Начиная с 1.1.8 применение заменяет именно WikiVibe endpoint/key настройками плагина: authenticated `/models` этого маршрута содержит 15 ID, включая DeepSeek/Gemini/GLM. Реальные OpenCode2 и OMP прочитали все 15; OpenCode2 подтвердил per-model SDK и image output, OMP RPC выбрал `gpt-image-2.5` с `api: openai-responses` и без tools. Другие провайдеры и активные defaults сохранены. Эти проверки каталога и выбора transport выполнены без inference; отдельно подтверждена прямая генерация изображений `gpt-image-2.5` через Responses.
 
 Существующие WikiVibe маршруты распознаются по HTTPS endpoint `api|vapi.wikivibe.dev|ru/v1`. Применение OpenCode/OMP заменяет прежние credentials и endpoint проверенными настройками плагина, сохраняя provider ID, комментарии вне изменяемого блока и metadata, не противоречащие transport. Все OpenCode routes на этих WikiVibe endpoint обновляются вместе, чтобы старые group credentials не оставались под другими именами. Другие провайдеры не меняются. Backups сохраняют точные исходные байты; последующие ручные изменения блокируют автоматическую перезапись и restore.
 
@@ -222,7 +225,7 @@ npm run package:plugin
 
 Тесты конфигураций и smoke используют временный домашний каталог, не реальные конфигурации пользователя. `--fixture` предоставляет только проверочный каталог, не подмену API в рабочем плагине. `npm run smoke` проверяет отказ реального API неверному ключу. Agent smoke проверяет чтение конфигурации установленным CLI. Worker smoke запускает настоящий IPC worker установленной Orca с изолированным хранилищем и cwd вне проекта. Ему нужна открытая локальная Orca с выбранным рабочим пространством: через настоящий CLI он проверяет принадлежность созданных вкладок рабочему пространству, готовность авторизованной localhost-страницы, удаление token из адреса и загрузку страницы регистрации. Smoke закрывает только созданные им вкладки и не заменяет установку через Settings.
 
-Проверены **65/65** поведенческих тестов, включая замену старых WikiVibe credentials вместе с каталогом, mixed Responses/Chat routing, image metadata, конфликтную защиту и точное восстановление. Реальные OpenCode2/OMP прочитали 15 ID; Codex 0.144.0/0.153.0 приняли каталог и профиль. Live inference не выполнялся. Ограничения native image dispatch перечислены выше.
+Проверены **65/65** поведенческих тестов, включая замену старых WikiVibe credentials вместе с каталогом, mixed Responses/Chat routing, image metadata, конфликтную защиту и точное восстановление. Реальные OpenCode2/OMP прочитали 15 ID; Codex 0.144.0/0.153.0 приняли каталог и профиль. Два прямых запроса WikiVibe Responses к `gpt-image-2.5` завершились HTTP 200 / `completed` и вернули PNG, сохранённые как `gateway-banner.png` и `setup-flow.png`. Coding inference и штатный OMP image-tool dispatch не подтверждены.
 
 ### Упаковка и marketplace
 
