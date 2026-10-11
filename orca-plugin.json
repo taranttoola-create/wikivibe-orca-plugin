@@ -3,7 +3,7 @@
   "id": "gateway",
   "publisher": "wikivibe",
   "name": "WikiVibe Gateway",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Подключение провайдера WikiVibe с моделями доступными API-ключу, защищённое хранение ключа и обратимая настройка агентов.",
   "engines": { "orca": ">=1.4.214" },
   "pluginApi": 1,
