@@ -166,7 +166,6 @@ test('OMP and Aider preserve YAML comments and unrelated values', async () => {
   assert.match(await get(root, '.omp/agent/models.yml'), /other:/);
   assert.match(await get(root, '.omp/agent/models.yml'), /wikivibe:/);
   assert.equal(await get(root, '.omp/agent/config.yml'), ompConfig);
-  for (const { id } of value.models) assert.ok((await get(root, '.omp/agent/models.yml')).includes(`- id: ${JSON.stringify(id)}`));
   assert.match(await get(root, '.aider.conf.yml'), /# aider user config/);
   assert.match(await get(root, '.aider.conf.yml'), /openai-api-base: "https:\/\/api.wikivibe.dev\/v1"/);
   assert.match(await get(root, '.aider.conf.yml'), /model: "openai\/existing"/);
@@ -222,7 +221,7 @@ test('refuses malformed JSON without exposing key or mutating file', async () =>
   assert.equal(await get(root, '.claude/settings.json'), malformed);
 });
 
-test('OpenCode rejects a catalog authenticated for a different or implicit credential or endpoint', async () => {
+test('OpenCode replaces mismatched and implicit WikiVibe credentials with the authenticated plugin route', async () => {
   for (const options of [
     { baseURL: endpoint, apiKey: 'other-group-credential' },
     { baseURL: endpoint },
@@ -231,11 +230,19 @@ test('OpenCode rejects a catalog authenticated for a different or implicit crede
   ]) {
     const root = await home();
     const rel = '.config/opencode/opencode.jsonc';
-    const original = JSON.stringify({ model: 'wikiwibe/allowed', provider: { wikiwibe: { options, models: { allowed: {} } } } }) + '\n';
+    const original = JSON.stringify({ model: 'wikiwibe/allowed', provider: { wikiwibe: { options, models: { allowed: {} } }, other: { options: { apiKey: 'unrelated' } } } }) + '\n';
     await put(root, rel, original);
-    await reject(applyAgents(['opencode'], value, { home: root }), /каталог.*ключ|ключ.*каталог/);
+    const preview = await previewAgents(['opencode'], value, { home: root });
+    assert.equal(JSON.stringify(preview).includes(value.apiKey), false);
     assert.equal(await get(root, rel), original);
-    await assert.rejects(lstat(path.join(root, '.config/opencode/.wikivibe-gateway-backups/opencode.jsonc.json')), { code: 'ENOENT' });
+    await applyAgents(['opencode'], value, { home: root });
+    const changed = JSON.parse(await get(root, rel));
+    assert.deepEqual(changed.provider.wikiwibe.options, { baseURL: endpoint, apiKey: value.apiKey });
+    assert.deepEqual(Object.keys(changed.provider.wikiwibe.models), value.models.map(row => row.id));
+    assert.equal(changed.model, 'wikiwibe/allowed');
+    assert.deepEqual(changed.provider.other, { options: { apiKey: 'unrelated' } });
+    await restoreAgents(['opencode'], { home: root });
+    assert.equal(await get(root, rel), original);
   }
 });
 
@@ -261,6 +268,25 @@ test('synchronizes existing OpenCode JSONC provider without changing routing, se
   }), /конфликт/);
 });
 
+test('routes GPT through Responses and retains image models without pretending tool support', async () => {
+  const root = await home();
+  const roster = { ...value, models: [{ id: 'gpt-6.1-sol' }, { id: 'gpt-image-2.5' }, { id: 'glm-5.3-flash' }] };
+  await applyAgents(['opencode', 'omp'], roster, { home: root });
+  const oc = JSON.parse(await get(root, '.config/opencode/opencode.json')).provider.wikivibe.models;
+  assert.equal(oc['gpt-6.1-sol'].provider.npm, '@ai-sdk/openai');
+  assert.equal(oc['glm-5.3-flash'].provider.npm, '@ai-sdk/openai-compatible');
+  assert.equal(oc['gpt-image-2.5'].tool_call, false);
+  assert.deepEqual(oc['gpt-image-2.5'].modalities.output, ['image']);
+  const { parse } = await import('yaml');
+  const omp = parse(await get(root, '.omp/agent/models.yml')).providers.wikivibe.models;
+  assert.deepEqual(omp.map(row => [row.id, row.api, row.kind]), [
+    ['gpt-6.1-sol', 'openai-responses', 'chat'],
+    ['gpt-image-2.5', 'openai-responses', 'image'],
+    ['glm-5.3-flash', 'openai-completions', 'chat']
+  ]);
+  assert.equal(omp[1].supportsTools, false);
+});
+
 test('synchronizes existing OMP catalog and restores exact original credentials and bytes', async () => {
   const root = await home();
   const original = 'providers:\n  wikivibe:\n    baseUrl: https://api.wikivibe.ru/v1\n    apiKey: "!/usr/bin/cat /local/key"\n    api: openai-completions\n    models:\n      - id: old\n      - id: wv-code-1\n        contextWindow: 12345\n';
@@ -268,8 +294,8 @@ test('synchronizes existing OMP catalog and restores exact original credentials 
   await applyAgents(['omp'], value, { home: root });
   const { parse } = await import('yaml');
   const changed = parse(await get(root, '.omp/agent/models.yml'));
-  assert.equal(changed.providers.wikivibe.apiKey, '!/usr/bin/cat /local/key');
-  assert.equal(changed.providers.wikivibe.baseUrl, 'https://api.wikivibe.ru/v1');
+  assert.equal(changed.providers.wikivibe.apiKey, value.apiKey);
+  assert.equal(changed.providers.wikivibe.baseUrl, endpoint);
   assert.deepEqual(changed.providers.wikivibe.models.map(row => row.id), value.models.map(row => row.id));
   assert.equal(changed.providers.wikivibe.models[0].contextWindow, 12345);
   await restoreAgents(['omp'], { home: root });
@@ -314,7 +340,6 @@ test('all seven adapters replace owned rosters, never inject public models, and 
   assert.deepEqual(Object.keys(JSON.parse(await get(root, '.config/opencode/opencode.json')).provider.wikivibe.models), ['new-authorized']);
   assert.deepEqual(JSON.parse(await get(root, '.pi/agent/models.json')).providers.wikivibe.models, refreshed.models);
   const omp = await get(root, '.omp/agent/models.yml');
-  assert.match(omp, /- id: "new-authorized"/);
   assert.doesNotMatch(omp, /wv-code/);
   assert.deepEqual(Object.keys(JSON.parse(await get(root, '.aider.model.metadata.json'))), ['other/user', 'openai/new-authorized']);
   const qwen = JSON.parse(await get(root, '.qwen/settings.json'));

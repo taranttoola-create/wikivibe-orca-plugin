@@ -1,5 +1,11 @@
 # История изменений
 
+## 1.1.8
+
+- Применение OpenCode/OMP теперь делает проверенные настройки WikiVibe плагина приоритетными: заменяет прежние WikiVibe key/endpoint вместе с полным authenticated catalog, с backups и точным restore. Все existing OpenCode WikiVibe routes мигрируются; чужие провайдеры и активные defaults сохранены.
+- GPT используют Responses, остальные ID — Chat Completions. `gpt-image-2.5` больше не направляется на chat endpoint; image output и отсутствие coding tools указаны явно. В OMP 18.6.3 custom image-kind не поддерживается; полный native image dispatch не заявлен.
+- Каталог Codex содержит обязательные ModelInfo поля для 0.144.0 и 0.153.0; обе версии прочитали 15 ID и приняли штатный профиль. Отдельно исправлена ошибочная таблица `features.multi_agent_v2` в локальном пользовательском config с точной копией.
+
 ## 1.1.7
 
 - OpenCode больше не получает каталог другого ключа при сохранении существующего маршрута. Preview и apply блокируют запись, если literal key или endpoint существующего провайдера не совпадают с проверенными; неявные credentials и env/file references не считаются подтверждением доступа. Ключ, endpoint и выбор модели не заменяются.

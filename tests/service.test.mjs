@@ -109,17 +109,20 @@ test('preview refreshes authenticated roster without choosing a model or changin
   assert.equal(await readFile(path, 'utf8'), before);
 });
 
-test('preview and apply refuse to advertise another credential group in an existing OpenCode route', async t => {
-  const { service, home } = await setup(t, async () => response(['unavailable-for-native-key']));
+test('apply replaces implicit OpenCode auth routing with the saved key and its authenticated catalog', async t => {
+  const { service, home } = await setup(t, async () => response(['permitted-for-plugin-key']));
   const file = await configFile(home, '.config/opencode/opencode.json', {
     provider: { wikiwibe: { options: { baseURL: ENDPOINTS[0] }, models: { permitted: {} } } }
   });
   const before = await readFile(file, 'utf8');
   await service.request('connect', { apiKey: 'fixture', baseUrl: ENDPOINTS[0] });
-  for (const action of ['preview', 'apply']) {
-    await assert.rejects(service.request(action, { agentIds: ['opencode'], confirmed: true }), /каталог.*ключ/);
-    assert.equal(await readFile(file, 'utf8'), before);
-  }
+  const preview = await service.request('preview', { agentIds: ['opencode'] });
+  assert.equal(JSON.stringify(preview).includes('fixture'), false);
+  assert.equal(await readFile(file, 'utf8'), before);
+  await service.request('apply', { agentIds: ['opencode'], confirmed: true });
+  const changed = JSON.parse(await readFile(file, 'utf8')).provider.wikiwibe;
+  assert.equal(changed.options.apiKey, 'fixture');
+  assert.deepEqual(Object.keys(changed.models), ['permitted-for-plugin-key']);
 });
 
 test('apply refreshes revoked and newly available models and preserves active selections and defaults', async t => {
