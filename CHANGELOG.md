@@ -1,5 +1,10 @@
 # История изменений
 
+## 1.1.5
+
+- Исправлено открытие защищённой настройки и регистрации на macOS: worker запускается через вложенный `Orca Helper.app`, но публичный CLI находится в `Contents/Resources/bin/orca` внешнего `Orca.app`. Прежний путь указывал на отсутствующий launcher внутри Helper и приводил к алерту «Не удалось выполнить команду плагина».
+- Добавлена регрессия для main/Helper/Renderer executable paths и precedence managed/development CLI. Helper-backed IPC smoke теперь использует тот же resolver, что и плагин; isolated host storage не выдаётся за OS vault.
+
 ## 1.1.4
 
 - Добавлен authenticated `/v1/usage?days=7`: баланс аккаунта, лимит и остаток ключа, расходы, запросы и токены сегодня/за весь срок, доступные оконные лимиты. Отсутствующие значения не превращаются в нули; ошибки API не раскрывают ключ или upstream response.

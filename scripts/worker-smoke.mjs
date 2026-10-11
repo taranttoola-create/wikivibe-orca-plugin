@@ -1,16 +1,17 @@
 import { execFile, fork } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import { promisify } from 'node:util';
 import { REGISTRATION_URL } from '../src/client.mjs';
+import { resolveOrcaCli } from '../src/orca-cli.mjs';
 
 // Uses the installed Orca IPC worker, not a replacement plugin runtime.
 const [executable, entry] = process.argv.slice(2);
 if (!executable || !entry) throw new Error('Укажите исполняемый файл установленной Orca и путь к plugin-host-entry.');
 const home = await mkdtemp(join(tmpdir(), 'wikivibe-worker-'));
-const cli = process.env.ORCA_CLI_COMMAND || (process.env.ORCA_DEV_REPO_ROOT ? 'orca-dev' : process.platform === 'darwin' ? resolve(dirname(executable), '../Resources/bin/orca') : process.platform === 'linux' ? 'orca-ide' : 'orca');
+const cli = resolveOrcaCli({ executable });
 const cliEnv = { ...process.env };
 delete cliEnv.ORCA_PAIRING_CODE;
 delete cliEnv.ORCA_ENVIRONMENT;

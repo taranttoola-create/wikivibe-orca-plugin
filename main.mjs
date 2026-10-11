@@ -1,22 +1,12 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { dirname, resolve } from 'node:path';
+import { resolveOrcaCli } from './src/orca-cli.mjs';
 import { REGISTRATION_URL } from './src/client.mjs';
 import { createService } from './src/service.mjs';
 import { startControlServer } from './src/server.mjs';
 
 let control;
 const execute = promisify(execFile);
-function orcaCli() {
-  if (process.env.ORCA_CLI_COMMAND) return process.env.ORCA_CLI_COMMAND;
-  if (process.env.ORCA_DEV_REPO_ROOT) return 'orca-dev';
-  // The installed macOS worker runs under Orca's Electron executable. Use
-  // that app's public launcher even when the desktop PATH lacks `orca`.
-  if (process.platform === 'darwin' && /\.app\/Contents\/MacOS\/[^/]+$/.test(process.execPath)) {
-    return resolve(dirname(process.execPath), '../Resources/bin/orca');
-  }
-  return process.platform === 'linux' ? 'orca-ide' : 'orca';
-}
 
 async function browserCommand(args, timeout) {
   try {
@@ -25,7 +15,7 @@ async function browserCommand(args, timeout) {
     delete env.ORCA_PAIRING_CODE;
     delete env.ORCA_ENVIRONMENT;
     delete env.ORCA_CLI_CWD;
-    const { stdout } = await execute(orcaCli(), [...args, '--json'], { env, timeout, maxBuffer: 1024 * 1024, windowsHide: true });
+    const { stdout } = await execute(resolveOrcaCli(), [...args, '--json'], { env, timeout, maxBuffer: 1024 * 1024, windowsHide: true });
     const response = JSON.parse(stdout);
     if (response.ok !== true) throw new Error();
     return response.result;
