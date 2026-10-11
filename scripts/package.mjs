@@ -1,7 +1,7 @@
 import { cp, mkdir, readFile, stat } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 const manifest = JSON.parse(await readFile('orca-plugin.json', 'utf8'));
-const files = ['orca-plugin.json', 'main.mjs', 'src', 'ui', 'panel.html', 'README.md'];
+const files = ['orca-plugin.json', 'main.mjs', 'src', 'ui', 'assets', 'panel.html', 'README.md'];
 for (const file of files) await stat(file);
 await mkdir('dist', { recursive: true });
 const folder = `dist/${manifest.publisher}.${manifest.id}-${manifest.version}`;
