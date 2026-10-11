@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import { startControlServer } from '../src/server.mjs';
+import { ConnectionError } from '../src/connection-errors.mjs';
 
 test('control API rejects unauthenticated, cross-origin and DNS rebinding requests', async t => {
   let mutations = 0;
@@ -45,4 +46,27 @@ test('oversize and invalid JSON never reach mutation service', async t => {
   assert.equal((await fetch(`${control.origin}/api/connect`, { method: 'POST', headers, body: 'not-json' })).status, 400);
   assert.equal((await fetch(`${control.origin}/api/connect`, { method: 'POST', headers, body: JSON.stringify({ apiKey: 'x'.repeat(20000) }) })).status, 413);
   assert.equal(called, false);
+});
+
+test('connect returns only trusted categories, never reflected upstream or host secrets', async t => {
+  let failure = new ConnectionError('api_auth');
+  const control = await startControlServer({ request: async () => { throw failure; } });
+  t.after(() => control.close());
+  const headers = { Authorization: `Bearer ${new URL(control.url).hash.slice(7)}`, 'Content-Type': 'application/json' };
+  async function connect() {
+    const response = await fetch(`${control.origin}/api/connect`, { method: 'POST', headers, body: JSON.stringify({ apiKey: 'secret-fixture' }) });
+    assert.equal(response.status, 400);
+    const value = await response.json();
+    assert.ok(!JSON.stringify(value).includes('secret-fixture'));
+    return value;
+  }
+  for (const code of ['api_auth', 'api_network', 'api_catalog', 'storage']) {
+    failure = new ConnectionError(code);
+    failure.message = 'secret-fixture';
+    assert.equal((await connect()).code, code);
+  }
+  failure = Object.assign(new Error('secret-fixture'), { code: 'api_auth' });
+  assert.equal((await connect()).code, 'unknown');
+  failure = new ConnectionError('secret-fixture');
+  assert.equal((await connect()).code, 'unknown');
 });

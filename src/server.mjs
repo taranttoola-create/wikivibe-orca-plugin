@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { ConnectionError, CONNECTION_MESSAGES } from './connection-errors.mjs';
 
 const OPERATIONS = new Set(['connect', 'models', 'preferences', 'preview', 'apply', 'restore', 'disconnect']);
 export async function startControlServer(service, { port = 0, idleMs = 4 * 60_000 } = {}) {
@@ -24,7 +25,7 @@ export async function startControlServer(service, { port = 0, idleMs = 4 * 60_00
       const nonce = randomBytes(16).toString('hex');
       response.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      response.end(template.replaceAll('__NONCE__', nonce));
+      response.end(template.replaceAll('__NONCE__', nonce).replace('__CONNECTION_MESSAGES__', JSON.stringify(CONNECTION_MESSAGES).replaceAll('<', '\\u003c')));
       return;
     }
     if (request.headers.origin && request.headers.origin !== origin) return json(response, 403, { error: 'Запрос отправлен не со страницы локальной панели.' });
@@ -56,10 +57,13 @@ export async function startControlServer(service, { port = 0, idleMs = 4 * 60_00
       const value = await service.request(action, body);
       json(response, 200, value);
     } catch (error) {
-      const message = action === 'connect'
-        ? 'Не удалось проверить и сохранить ключ. Проверьте доступ к API и защищённому хранилищу Orca.'
-        : error instanceof Error ? error.message : 'Операция не выполнена.';
-      json(response, 400, { error: message.slice(0, 512) });
+      if (action === 'connect') {
+        const code = error instanceof ConnectionError && Object.hasOwn(CONNECTION_MESSAGES, error.code) ? error.code : 'unknown';
+        json(response, 400, { code, error: CONNECTION_MESSAGES[code] });
+      } else {
+        const message = error instanceof Error ? error.message : 'Операция не выполнена.';
+        json(response, 400, { error: message.slice(0, 512) });
+      }
     } finally { inFlight--; lastActivity = Date.now(); }
   });
   server.requestTimeout = 20000;

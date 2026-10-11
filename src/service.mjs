@@ -1,5 +1,6 @@
-import { apiKey, endpoint, ENDPOINTS, REGISTRATION_URL, listModels, listCatalog } from './client.mjs';
+import { apiKey, endpoint, ENDPOINTS, REGISTRATION_URL, listModels } from './client.mjs';
 import { listAgents, previewAgents, applyAgents, restoreAgents } from './adapters.mjs';
+import { ConnectionError } from './connection-errors.mjs';
 
 export function createService(host, { home, fetchImpl = fetch } = {}) {
   let models = [];
@@ -8,7 +9,7 @@ export function createService(host, { home, fetchImpl = fetch } = {}) {
   const options = { home };
   async function config() {
     const { value } = await host.call('storage.get', { key: 'preferences' });
-    return { baseUrl: ENDPOINTS.includes(value?.baseUrl) ? value.baseUrl : ENDPOINTS[0], model: typeof value?.model === 'string' ? value.model : '' };
+    return { baseUrl: ENDPOINTS.includes(value?.baseUrl) ? value.baseUrl : ENDPOINTS[0] };
   }
   async function key() {
     const { value } = await host.call('secrets.get', { key: 'apiKey' });
@@ -23,18 +24,25 @@ export function createService(host, { home, fetchImpl = fetch } = {}) {
   async function save(preferences) {
     await host.call('storage.set', { key: 'preferences', value: preferences });
   }
+  async function roster(baseUrl, credential) {
+    const catalog = await listModels(baseUrl, credential, { fetchImpl });
+    if (!catalog.length) throw new ConnectionError('api_catalog');
+    return catalog;
+  }
   async function perform(action, body = {}) {
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Некорректный запрос.');
     switch (action) {
       case 'state': return state();
       case 'connect': {
-        const preferences = { baseUrl: endpoint(body.baseUrl), model: '' };
+        const preferences = { baseUrl: endpoint(body.baseUrl) };
         const credential = apiKey(body.apiKey);
-        const catalog = await listCatalog(preferences.baseUrl, credential, { fetchImpl });
-        const previous = await config();
-        if (previous.baseUrl === preferences.baseUrl && catalog.some(m => m.id === previous.model && m.available)) preferences.model = previous.model;
-        await host.call('secrets.set', { key: 'apiKey', value: credential });
-        await save(preferences);
+        const catalog = await roster(preferences.baseUrl, credential);
+        try {
+          await host.call('secrets.set', { key: 'apiKey', value: credential });
+          await save(preferences);
+        } catch {
+          throw new ConnectionError('storage');
+        }
         models = catalog;
         modelsBase = preferences.baseUrl;
         return state();
@@ -42,28 +50,35 @@ export function createService(host, { home, fetchImpl = fetch } = {}) {
       case 'models': {
         const preferences = await config();
         const selected = body.baseUrl === undefined ? preferences.baseUrl : endpoint(body.baseUrl);
-        models = await listCatalog(selected, await key(), { fetchImpl });
+        models = await roster(selected, await key());
         modelsBase = selected;
         return { models };
       }
       case 'preferences': {
         const selected = endpoint(body.baseUrl);
-        const catalog = await listCatalog(selected, await key(), { fetchImpl });
-        if (typeof body.model !== 'string' || !catalog.some(m => m.id === body.model && m.available)) throw new Error('Эта модель недоступна текущему API-ключу. Выберите модель с доступом или замените ключ.');
-        await save({ baseUrl: selected, model: body.model });
+        const catalog = await roster(selected, await key());
+        await save({ baseUrl: selected });
         models = catalog;
         modelsBase = selected;
         return state();
       }
-      case 'preview': return previewAgents(body.agentIds, await config(), options);
+      case 'preview': {
+        const preferences = await config();
+        const catalog = await roster(preferences.baseUrl, await key());
+        models = catalog;
+        modelsBase = preferences.baseUrl;
+        const preview = await previewAgents(body.agentIds, { ...preferences, models: catalog }, options);
+        return { ...preview, models: catalog };
+      }
       case 'apply': {
         if (body.confirmed !== true) throw new Error('Подтвердите изменение файлов агентов и запись API-ключа в их конфигурации открытым текстом.');
         const preferences = await config();
-        if (!preferences.model) throw new Error('Сначала выберите и сохраните модель.');
         const credential = await key();
-        const catalog = await listModels(preferences.baseUrl, credential, { fetchImpl });
-        if (!catalog.some(m => m.id === preferences.model)) throw new Error('Выбранная модель больше недоступна. Обновите список моделей.');
-        return applyAgents(body.agentIds, { ...preferences, apiKey: credential }, options);
+        const catalog = await roster(preferences.baseUrl, credential);
+        models = catalog;
+        modelsBase = preferences.baseUrl;
+        const result = await applyAgents(body.agentIds, { ...preferences, models: catalog, apiKey: credential }, options);
+        return { ...result, models: catalog };
       }
       case 'restore': {
         if (body.confirmed !== true) throw new Error('Подтвердите восстановление файлов агентов из резервных копий.');

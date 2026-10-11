@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createService } from '../src/service.mjs';
@@ -18,7 +18,7 @@ const host = { async call(method, { key, value }) {
   return { ok: true };
 } };
 const fixture = process.argv.includes('--fixture');
-const service = createService(host, { home, ...(fixture ? { fetchImpl: async url => Response.json({ data: url.endsWith('/marketplace/models') ? [{ models: [{ id: 'fixture-model' }, { id: 'other-group-model' }] }] : [{ id: 'fixture-model' }] }) } : {}) });
+const service = createService(host, { home, ...(fixture ? { fetchImpl: async () => Response.json({ data: [{ id: 'fixture-model' }, { id: 'second-fixture-model' }] }) } : {}) });
 const control = await startControlServer(service, { idleMs: 10 * 60_000 });
 console.log(JSON.stringify({ url: control.url, home, mode: fixture ? 'isolated-fixture' : 'real-network' }));
 async function cleanup() { await control.close(); await rm(home, { recursive: true, force: true }); }
@@ -39,15 +39,21 @@ if (process.argv.includes('--serve')) {
       assert.equal(secrets.size, 0);
       console.log('Реальный API WikiVibe отклонил неверный ключ; хранилище осталось пустым.');
     } else {
-      assert.equal((await post('connect', { apiKey: 'fixture-credential', baseUrl: 'https://api.wikivibe.dev/v1' })).value.connected, true);
-      assert.equal((await post('preferences', { baseUrl: 'https://api.wikivibe.dev/v1', model: 'fixture-model' })).status, 200);
+      const connected = await post('connect', { apiKey: 'fixture-credential', baseUrl: 'https://api.wikivibe.dev/v1' });
+      assert.equal(connected.value.connected, true);
+      assert.deepEqual(connected.value.models, [{ id: 'fixture-model' }, { id: 'second-fixture-model' }]);
+      assert.equal(Object.hasOwn(connected.value, 'model'), false);
+      assert.equal((await post('preferences', { baseUrl: 'https://api.wikivibe.dev/v1' })).status, 200);
       const preview = await post('preview', { agentIds: ['opencode'] });
       assert.equal(preview.status, 200);
       assert.equal((await post('apply', { agentIds: ['opencode'], confirmed: false })).status, 400);
       assert.equal((await post('apply', { agentIds: ['opencode'], confirmed: true })).status, 200);
+      const installed = JSON.parse(await readFile(join(home, '.config/opencode/opencode.json'), 'utf8'));
+      assert.deepEqual(Object.keys(installed.provider.wikivibe.models), ['fixture-model', 'second-fixture-model']);
+      assert.equal(Object.hasOwn(installed, 'model'), false);
       assert.equal((await post('restore', { agentIds: ['opencode'], confirmed: true })).status, 200);
       assert.equal((await post('disconnect', {})).value.connected, false);
-      console.log('Изолированный сценарий: ключ → настройки → просмотр → согласие → применение → восстановление → удаление ключа.');
+      console.log('Изолированный сценарий: ключ → каталог провайдера → просмотр → согласие → применение → восстановление → удаление ключа. Модель в панели не выбирается.');
     }
   } finally { await cleanup(); }
 }
