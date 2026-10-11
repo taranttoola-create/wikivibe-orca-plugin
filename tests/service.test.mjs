@@ -109,6 +109,19 @@ test('preview refreshes authenticated roster without choosing a model or changin
   assert.equal(await readFile(path, 'utf8'), before);
 });
 
+test('preview and apply refuse to advertise another credential group in an existing OpenCode route', async t => {
+  const { service, home } = await setup(t, async () => response(['unavailable-for-native-key']));
+  const file = await configFile(home, '.config/opencode/opencode.json', {
+    provider: { wikiwibe: { options: { baseURL: ENDPOINTS[0] }, models: { permitted: {} } } }
+  });
+  const before = await readFile(file, 'utf8');
+  await service.request('connect', { apiKey: 'fixture', baseUrl: ENDPOINTS[0] });
+  for (const action of ['preview', 'apply']) {
+    await assert.rejects(service.request(action, { agentIds: ['opencode'], confirmed: true }), /каталог.*ключ/);
+    assert.equal(await readFile(file, 'utf8'), before);
+  }
+});
+
 test('apply refreshes revoked and newly available models and preserves active selections and defaults', async t => {
   let roster = ['revoked', 'retained'];
   let calls = 0;

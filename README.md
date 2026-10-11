@@ -2,20 +2,20 @@
 
 WikiVibe Gateway — самостоятельный плагин Orca для подключения провайдера WikiVibe к поддерживаемым CLI-агентам. Он проверяет API-ключ, загружает все доступные этому ключу модели и после предварительного просмотра и вашего согласия записывает провайдера, каталог и ключ в нативные конфигурации. Модель выбирается в самом агенте, а не в защищённой настройке. Форк Orca и изменение её параметров запуска не нужны.
 
-**Версия — 1.1.6.** Настройка открывается во встроенном браузере Orca; защищённая страница показывает данные лимитов и расходов ключа. Живые данные в native sidebar пока недоступны: поддержанного канала worker → panel в Orca 1.4.223 нет.
+**Версия — 1.1.7.** Настройка открывается во встроенном браузере Orca; защищённая страница показывает данные лимитов и расходов ключа. Живые данные в native sidebar пока недоступны: поддержанного канала worker → panel в Orca 1.4.223 нет.
 
 ## Установка
 
-В **Settings → Plugins → Install plugin → Git URL** укажите адрес версии 1.1.6:
+В **Settings → Plugins → Install plugin → Git URL** укажите адрес версии 1.1.7:
 
 ```text
-https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.1.6
+https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.1.7
 ```
 
 1. Откройте **Settings → Plugins** и включите **Plugin system**.
 2. Выберите **Install plugin → Git URL**, вставьте адрес выше и установите плагин.
 3. Проверьте разрешения: `secrets`, `storage`, `notifications:show`. Дайте согласие и включите **WikiVibe Gateway**.
-4. После включения откройте правую панель Orca и выберите вкладку **WikiVibe**. В панели отображаются версия **1.1.6** и пошаговая инструкция запуска команд.
+4. После включения откройте правую панель Orca и выберите вкладку **WikiVibe**. В панели отображаются версия **1.1.7** и пошаговая инструкция запуска команд.
 5. На Mac нажмите **⌘ J** — откроется окно **Jump to…** с поиском действий. Или нажмите вверху левой панели Orca **Search worktrees and browser tabs**.
 6. В поиске введите **WikiVibe**, выберите нужную команду и нажмите **Enter**. Названия команд в боковой панели — это подсказки, а не кнопки.
 
@@ -24,18 +24,18 @@ https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.1.6
 
 Нужна Orca с plugin API 1. В manifest указана минимальная версия 1.4.214; panel manifest, panel sandbox и panel bridge проверены на Orca 1.4.223.
 
-Репозиторий: [taranttoola-create/wikivibe-orca-plugin](https://github.com/taranttoola-create/wikivibe-orca-plugin). [Исходники версии 1.1.6](https://github.com/taranttoola-create/wikivibe-orca-plugin/tree/v1.1.6). [GitHub Release 1.1.6](https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/tag/v1.1.6).
+Репозиторий: [taranttoola-create/wikivibe-orca-plugin](https://github.com/taranttoola-create/wikivibe-orca-plugin). [Исходники версии 1.1.7](https://github.com/taranttoola-create/wikivibe-orca-plugin/tree/v1.1.7). [GitHub Release 1.1.7](https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/tag/v1.1.7).
 
 ### Обновление уже установленного плагина
 
 Повторите **Install plugin → Git URL** с полным адресом выше, заменив прежнее содержимое поля целиком. Тег закрепляет версию: повторная установка `#v1.0.2` не загрузит более новый релиз. Удалять плагин или вручную править хранилище Orca не нужно.
 
-После успешной установки проверьте **WikiVibe Gateway · v1.1.6** в Settings → Plugins, подтвердите разрешения при запросе и включите плагин. В боковой панели также должна появиться версия **1.1.6**. Если диалог показывает **Orca could not fetch the pinned Git revision**, обновление не состоялось: старая копия остаётся установленной. Проверьте полный URL, `#v1.1.6` и доступ Git либо используйте локальную папку. Для обновления списков моделей повторите preview и применение к агентам, затем откройте новые сессии.
+После успешной установки проверьте **WikiVibe Gateway · v1.1.7** в Settings → Plugins, подтвердите разрешения при запросе и включите плагин. В боковой панели также должна появиться версия **1.1.7**. Если диалог показывает **Orca could not fetch the pinned Git revision**, обновление не состоялось: старая копия остаётся установленной. Проверьте полный URL, `#v1.1.7` и доступ Git либо используйте локальную папку. Для обновления списков моделей повторите preview и применение к агентам, затем откройте новые сессии.
 
 ### Установка из локальной папки
 
-Для установки версии 1.1.6 скачайте архив из [GitHub Release 1.1.6](https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/tag/v1.1.6) и распакуйте его, либо выполните `npm run package:plugin` в исходниках. Выберите **Install plugin → Local folder** и укажите распакованную папку или `dist/wikivibe.gateway-1.1.6/`. Orca скопирует папку в своё хранилище; исходники Orca и параметры запуска не меняются. Убедитесь, что Settings → Plugins и sidebar показывают **1.1.6**, затем повторите preview и применение к агентам и откройте новые сессии.
-Архив `dist/wikivibe.gateway-1.1.6.tar.gz` сначала распакуйте. Архив служит для передачи файлов, а не прямого импорта в Orca. Node.js и npm нужны для разработки и упаковки, но не для установки готовой папки.
+Для установки версии 1.1.7 скачайте архив из [GitHub Release 1.1.7](https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/tag/v1.1.7) и распакуйте его, либо выполните `npm run package:plugin` в исходниках. Выберите **Install plugin → Local folder** и укажите распакованную папку или `dist/wikivibe.gateway-1.1.7/`. Orca скопирует папку в своё хранилище; исходники Orca и параметры запуска не меняются. Убедитесь, что Settings → Plugins и sidebar показывают **1.1.7**, затем повторите preview и применение к агентам и откройте новые сессии.
+Архив `dist/wikivibe.gateway-1.1.7.tar.gz` сначала распакуйте. Архив служит для передачи файлов, а не прямого импорта в Orca. Node.js и npm нужны для разработки и упаковки, но не для установки готовой папки.
 
 ## Где вводить ключ
 
@@ -87,11 +87,13 @@ https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.1.6
 
 Все 14 тестовых моделей подтверждены установленными OpenCode и oh-my-pi во временном HOME с исходными allowlist и запретом WikiVibe. Codex app-server ранее вернул две модели через `model/list` с provider/catalog overrides, эквивалентными файлу профиля; запуск профиля через TUI отдельно не проверялся. Для Claude Code, Pi, Aider и Qwen проверены файлы и контракты в тестах, не реальный запуск этих CLI. Платные запросы к моделям и успешная генерация через WikiVibe не проверялись.
 
-На реальных локальных конфигурациях обнаружены 9 моделей OMP и 3 OpenCode вместо полного authenticated каталога. После синхронизации установленный OMP и native backend OpenCode 2 прочитали все 15 актуальных ID из рабочей папки. Уже открытые сессии не перезапускались: их интерактивные меню отдельно не проверены. Ни один inference-запрос не выполнялся.
+Первоначальная проверка native backend OpenCode2 подтвердила видимость 15 ID, но не доступ фактического ключа. Ошибки `The current group does not support the requested model` выявили несовпадение: прежний `wikiwibe` на `api.wikivibe.ru/v1` использует собственный credential с доступом к 10 моделям. Каталог исправлен по authenticated `/models` именно этого ключа; свежий OpenCode2 прочитал ровно 10 ID, без DeepSeek/Gemini/GLM. Ключ, endpoint, активная модель и работающие сессии не менялись. OMP и Codex сохраняют свои отдельно проверенные каталоги; число моделей одного ключа не переносится на другой. Inference не выполнялся.
 
-Для существующего OpenCode/OMP WikiVibe маршрут распознаётся по HTTPS endpoint `api|vapi.wikivibe.dev|ru/v1`. Обновляется только каталог: credentials, endpoint, ID провайдера и метаданные сохранённых моделей остаются прежними. В OpenCode основной ID `wikivibe`/`wikiwibe` имеет приоритет над дополнительными провайдерами того же шлюза; неоднозначность блокирует запись. Backups сохраняют точные исходные байты. Чтобы заменить существующий ключ, сначала восстановите конфигурацию и измените его штатным способом — синхронизация каталогов ключ не заменяет.
+Для существующего OpenCode/OMP WikiVibe маршрут распознаётся по HTTPS endpoint `api|vapi.wikivibe.dev|ru/v1`. Credentials, endpoint, ID провайдера и метаданные сохранённых моделей сохраняются. **OpenCode обновляет каталог только при совпадении literal key и endpoint с теми, которыми проверен доступ.** Если ключ хранится в native auth, задан через env/file reference либо отличается, preview и apply блокируют запись: каталог другого ключа нельзя выдавать за доступ этого маршрута. Совпадение ключа при другом endpoint также недостаточно. Плагин не читает native credential DB и не переключает auth автоматически. В OpenCode основной ID `wikivibe`/`wikiwibe` имеет приоритет; неоднозначность блокирует запись. Backups сохраняют точные исходные байты. Синхронизация каталогов не заменяет существующий ключ.
 
 Каталог Codex подтверждает backend/CLI, а не меню Desktop или Orca: [известно отдельное ограничение Desktop picker](https://github.com/openai/codex/issues/19694). У CLI, принимающего только один transport или профиль за сессию, установка каталога не создаёт переключатель между произвольными провайдерами.
+
+Ошибка `The current group does not support the requested model` означает отказ группы шлюза, а не неполное меню. Проверяйте authenticated `/models` на фактическом endpoint и с фактическим credential используемого провайдера. Добавление ID в JSONC не расширяет доступ. Для DeepSeek/GLM нужен маршрут с разрешающим их ключом/группой; плагин не меняет credentials или группу без согласия.
 
 OpenCode 2.0.1 активирует плагины асинхронно: холодный `models --standalone` может вернуть пустой список до завершения активации. Runtime smoke ждёт штатный `/api/plugin/await-activation`, затем проверяет enabled WikiVibe и все 14 моделей через native API. В реальной сессии дождитесь загрузки каталога перед `/models`.
 
@@ -132,10 +134,10 @@ Worker — доверенный Node-процесс с доступом к фа�
 Используйте закреплённую версию:
 
 ```text
-https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.1.6
+https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.1.7
 ```
 
-Orca принимает тег или полный 40-символьный SHA commit. Короткий SHA трактуется как имя ветки или тега и может привести к ошибке загрузки. Проверьте доступность полного репозитория `taranttoola-create/wikivibe-orca-plugin` и тега `v1.1.6`; не заменяйте тег сокращённым commit. Загрузка и checkout по полному SHA проверены отдельно от установки через Settings.
+Orca принимает тег или полный 40-символьный SHA commit. Короткий SHA трактуется как имя ветки или тега и может привести к ошибке загрузки. Проверьте доступность полного репозитория `taranttoola-create/wikivibe-orca-plugin` и тега `v1.1.7`; не заменяйте тег сокращённым commit. Загрузка и checkout по полному SHA проверены отдельно от установки через Settings.
 
 ### «Не удалось выполнить команду плагина» на macOS
 
@@ -175,7 +177,7 @@ Orca принимает тег или полный 40-символьный SHA c
 
 ## Разработка и проверки
 
-Для разработки нужен Node.js 22 или новее и `npm ci`. Парсеры JSONC/YAML включены в `src/vendor`; runtime установки npm не требует. Пересборка: `npm run vendor`. Команды выполняются из корня исходников 1.1.6:
+Для разработки нужен Node.js 22 или новее и `npm ci`. Парсеры JSONC/YAML включены в `src/vendor`; runtime установки npm не требует. Пересборка: `npm run vendor`. Команды выполняются из корня исходников 1.1.7:
 
 ```sh
 npm test
@@ -194,15 +196,15 @@ npm run package:plugin
 
 ### Упаковка и marketplace
 
-`npm run package:plugin` создаёт папку `dist/wikivibe.gateway-1.1.6/` и архив. Для установки используйте Git URL `#v1.1.6`, Local folder или архив из [GitHub Release 1.1.6](https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/tag/v1.1.6). Старый тег `#v1.1.0` не содержит исправления фильтров.
+`npm run package:plugin` создаёт папку `dist/wikivibe.gateway-1.1.7/` и архив. Для установки используйте Git URL `#v1.1.7`, Local folder или архив из [GitHub Release 1.1.7](https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/tag/v1.1.7). Старый тег `#v1.1.0` не содержит исправления фильтров.
 
 Для подготовки marketplace index выполните:
 
 ```sh
-node scripts/marketplace.mjs https://github.com/taranttoola-create/wikivibe-orca-plugin.git v1.1.6
+node scripts/marketplace.mjs https://github.com/taranttoola-create/wikivibe-orca-plugin.git v1.1.7
 ```
 
-Сохраните JSON из stdout как `orca-marketplace.json` в своём marketplace-репозитории. Скрипт принимает URL и тег раздельно: в индексе `source.url` будет `https://github.com/taranttoola-create/wikivibe-orca-plugin.git`, а `source.ref` — `v1.1.6`. Это та же закреплённая версия, что и Git URL установки выше. Генерация индекса сама по себе не публикует плагин.
+Сохраните JSON из stdout как `orca-marketplace.json` в своём marketplace-репозитории. Скрипт принимает URL и тег раздельно: в индексе `source.url` будет `https://github.com/taranttoola-create/wikivibe-orca-plugin.git`, а `source.ref` — `v1.1.7`. Это та же закреплённая версия, что и Git URL установки выше. Генерация индекса сама по себе не публикует плагин.
 
 ## Первичные источники
 

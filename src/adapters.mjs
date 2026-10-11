@@ -25,7 +25,7 @@ const BACKUPS = '.wikivibe-gateway-backups';
 const AGENTS = [
   { id: 'claude', label: 'Claude Code', rel: '.claude/settings.json', protocol: 'Anthropic Messages', description: 'В ~/.claude/settings.json: env.ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN и полный modelPicker (Claude Code ≥ 2.1.242). Отдельный поставщик WikiVibe не поддерживается: шлюз заменяет Anthropic endpoint. Текущая модель не меняется; выбор через /model.' },
   { id: 'codex', label: 'Codex', rel: '.codex/config.toml', protocol: 'OpenAI Responses', description: 'Регистрация model_providers.wikivibe в ~/.codex/config.toml; ~/.codex/wikivibe.config.toml и wikivibe-models.json — отдельный полный каталог. Пользователь включает профиль штатно: codex -p wikivibe, затем /model. Базовые model/model_provider не меняются. Нужна версия с профильными файлами и model_catalog_json; Desktop/Orca picker не гарантируется.' },
-  { id: 'opencode', label: 'OpenCode', rel: '.config/opencode/opencode.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.config/opencode/opencode.json или .jsonc: provider WikiVibe и все models. Существующий WikiVibe определяется по endpoint; его ID, credentials и выбранная model сохраняются. Выбор через /models.' },
+  { id: 'opencode', label: 'OpenCode', rel: '.config/opencode/opencode.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.config/opencode/opencode.json или .jsonc: provider WikiVibe и все models. Существующий WikiVibe определяется по endpoint; его ID, credentials и выбранная model сохраняются. Каталог обновляется только при совпадении literal key и endpoint с проверенными; неявный или другой ключ блокирует запись. Выбор через /models.' },
   { id: 'pi', label: 'Pi', rel: '.pi/agent/models.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.pi/agent/models.json: providers.wikivibe с baseUrl, apiKey, api = openai-completions и всеми models. Существующий settings.json/enabledModels расширяется ID wikivibe/<id>; defaultProvider/defaultModel не меняются. Выбор через /model.' },
   { id: 'omp', label: 'oh-my-pi', rel: '.omp/agent/models.yml', protocol: 'OpenAI Chat Completions', description: 'В ~/.omp/agent/models.yml: providers.wikivibe с baseUrl, apiKey, api = openai-completions и всеми models. Поддерживается .yaml и простой YAML. Фильтры config.yml расширяются только для WikiVibe; modelRoles не меняются. Выбор через /model.' },
   { id: 'aider', label: 'Aider', rel: '.aider.conf.yml', protocol: 'OpenAI Chat Completions', description: 'В ~/.aider.conf.yml: openai-api-base и openai-api-key; ~/.aider.model.metadata.json регистрирует весь каталог для /models. Отдельного поставщика WikiVibe нет: используется openai/<id>, общий OpenAI endpoint заменяется. Текущая model не меняется; выбор через /model openai/<id>. /models также показывает встроенные модели LiteLLM, не подтверждённые ключом; лимиты и цены неизвестны.' },
@@ -91,6 +91,11 @@ function openCodeConfig(text, value) {
   const [id, entry] = candidates[0] ?? ['wikivibe', undefined];
   if (!entry && own(providers, id)) fail('OpenCode: wikivibe указывает на другой endpoint; файл не изменён.');
   if (entry && !object(entry.models ?? {})) fail('OpenCode: models должен быть объектом.');
+  // A preserved native credential may belong to a narrower gateway group.
+  // Never publish another key/endpoint's authenticated catalog into that route.
+  if (entry && (typeof value.apiKey !== 'string' || entry.options.apiKey !== value.apiKey || entry.options.baseURL.replace(/\/$/, '') !== value.baseUrl)) {
+    fail('OpenCode: каталог проверен другим ключом или endpoint; существующий ключ может иметь иной доступ. Файл не изменён. Синхронизируйте каталог с фактическим ключом и endpoint средствами OpenCode.');
+  }
   const models = Object.fromEntries(value.models.map(({ id: model }) => [model, entry?.models?.[model] ?? { name: model }]));
   let output = text || '{}\n';
   const formattingOptions = { insertSpaces: true, tabSize: 2, eol: text.includes('\r\n') ? '\r\n' : '\n' };
@@ -517,7 +522,7 @@ export async function listAgents({ home = homedir() } = {}) {
 export async function previewAgents(agentIds, value, { home = homedir() } = {}) {
   const agents = selected(agentIds); preferences(value);
   const root = await homeRoot(home);
-  const changes = await plans(root, agents, { ...value, apiKey: 'preview-redacted' });
+  const changes = await plans(root, agents, { ...value, apiKey: value.apiKey ?? 'preview-redacted' });
   return { changes: changes.map(plan => ({ agentId: plan.agent.id, path: plan.target, description: `${plan.agent.label}: ${plan.cleanup ? 'восстановление прежних настроек выбора' : plan.filters ? 'расширение фильтров только для WikiVibe' : 'установка полного доступного каталога'}, ${plan.agent.protocol}. Плагин сохранит резервную копию. Восстановление доступно, только если файл не изменится после применения.`, secretOnDisk: !plan.cleanup && !plan.filters && !plan.rel.endsWith('wikivibe-models.json') && !plan.rel.endsWith('wikivibe.config.toml') && !plan.rel.endsWith('.metadata.json') })), warnings: warnings(agents) };
 }
 export async function applyAgents(agentIds, value, { home = homedir() } = {}) {

@@ -69,10 +69,11 @@ export function createService(host, { home, fetchImpl = fetch, openRegistration 
       }
       case 'preview': {
         const preferences = await config();
-        const catalog = await roster(preferences.baseUrl, await key());
+        const credential = await key();
+        const catalog = await roster(preferences.baseUrl, credential);
         models = catalog;
         modelsBase = preferences.baseUrl;
-        const preview = await previewAgents(body.agentIds, { ...preferences, models: catalog }, options);
+        const preview = await previewAgents(body.agentIds, { ...preferences, models: catalog, apiKey: credential }, options);
         return { ...preview, models: catalog };
       }
       case 'apply': {

@@ -222,16 +222,36 @@ test('refuses malformed JSON without exposing key or mutating file', async () =>
   assert.equal(await get(root, '.claude/settings.json'), malformed);
 });
 
+test('OpenCode rejects a catalog authenticated for a different or implicit credential or endpoint', async () => {
+  for (const options of [
+    { baseURL: endpoint, apiKey: 'other-group-credential' },
+    { baseURL: endpoint },
+    { baseURL: endpoint, apiKey: '{env:WIKIVIBE_KEY}' },
+    { baseURL: 'https://api.wikivibe.ru/v1', apiKey: value.apiKey }
+  ]) {
+    const root = await home();
+    const rel = '.config/opencode/opencode.jsonc';
+    const original = JSON.stringify({ model: 'wikiwibe/allowed', provider: { wikiwibe: { options, models: { allowed: {} } } } }) + '\n';
+    await put(root, rel, original);
+    await reject(applyAgents(['opencode'], value, { home: root }), /каталог.*ключ|ключ.*каталог/);
+    assert.equal(await get(root, rel), original);
+    await assert.rejects(lstat(path.join(root, '.config/opencode/.wikivibe-gateway-backups/opencode.jsonc.json')), { code: 'ENOENT' });
+  }
+});
+
 test('synchronizes existing OpenCode JSONC provider without changing routing, selection or comments', async () => {
   const root = await home();
-  const original = '{\n // user comment\n "model":"wikiwibe/old",\n "provider":{"wikiwibe":{"options":{"baseURL":"https://api.wikivibe.ru/v1","apiKey":"{file:key}"},"models":{"old":{},"wv-code-1":{"name":"Custom"}}}},\n}\n';
+  const original = '{\n // user comment\n "model":"wikiwibe/old",\n "provider":{"wikiwibe":{"options":{"baseURL":"https://api.wikivibe.dev/v1","apiKey":"wv-test-key-42"},"models":{"old":{},"wv-code-1":{"name":"Custom"}}}},\n}\n';
   await put(root, '.config/opencode/opencode.jsonc', original);
+  const preview = await previewAgents(['opencode'], value, { home: root });
+  assert.equal(JSON.stringify(preview).includes(value.apiKey), false);
+  assert.equal(await get(root, '.config/opencode/opencode.jsonc'), original);
   await applyAgents(['opencode'], value, { home: root });
   const { parse } = await import('jsonc-parser');
   const changedText = await get(root, '.config/opencode/opencode.jsonc');
   const changed = parse(changedText);
   assert.equal(changed.model, 'wikiwibe/old');
-  assert.deepEqual(changed.provider.wikiwibe.options, { baseURL: 'https://api.wikivibe.ru/v1', apiKey: '{file:key}' });
+  assert.deepEqual(changed.provider.wikiwibe.options, { baseURL: endpoint, apiKey: value.apiKey });
   assert.deepEqual(Object.keys(changed.provider.wikiwibe.models), value.models.map(row => row.id));
   assert.equal(changed.provider.wikiwibe.models['wv-code-1'].name, 'Custom');
   assert.ok(changedText.includes('// user comment'));
