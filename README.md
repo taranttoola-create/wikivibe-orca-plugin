@@ -55,6 +55,10 @@ https://github.com/taranttoola-create/wikivibe-orca-plugin.git#v1.1.9
 
 Репозиторий: [taranttoola-create/wikivibe-orca-plugin](https://github.com/taranttoola-create/wikivibe-orca-plugin). [Исходники версии 1.1.9](https://github.com/taranttoola-create/wikivibe-orca-plugin/tree/v1.1.9). [GitHub Release 1.1.9](https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/tag/v1.1.9).
 
+### Предыдущая версия 1.1.8
+
+Сведения о предыдущем выпуске сохранены отдельно: [исходники v1.1.8](https://github.com/taranttoola-create/wikivibe-orca-plugin/tree/v1.1.8), [GitHub Release 1.1.8](https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/tag/v1.1.8), [архив v1.1.8](https://github.com/taranttoola-create/wikivibe-orca-plugin/releases/download/v1.1.8/wikivibe.gateway-1.1.8.tar.gz). Для новой установки используйте только текущий Git URL `#v1.1.9` выше.
+
 ### Обновление уже установленного плагина
 
 Повторите **Install plugin → Git URL** с полным адресом выше, заменив прежнее содержимое поля целиком. Тег закрепляет версию: повторная установка `#v1.0.2` не загрузит более новый релиз. Удалять плагин или вручную править хранилище Orca не нужно.
