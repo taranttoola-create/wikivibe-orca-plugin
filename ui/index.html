@@ -153,12 +153,13 @@
               <p id="preview-settings" class="help"></p>
               <ul id="changes" class="change-list"></ul>
               <ul id="preview-warnings" class="warnings" hidden></ul>
+              <ul id="preview-failures" class="warnings" hidden></ul>
               <label class="consent"><input id="consent" type="checkbox"><span>Разрешаю записать API-ключ в открытом виде в указанные конфигурационные файлы выбранных агентов. Я понимаю риск и согласен с перечисленными изменениями.</span></label>
               <button id="apply-button" class="primary" type="button" disabled>Применить к выбранным агентам</button>
             </div>
           </fieldset>
-          <div id="result" class="preview" role="status" aria-live="polite" hidden><h3 id="result-title"></h3><ul id="result-items" class="change-list"></ul><ul id="result-warnings" class="warnings" hidden></ul></div>
-          <p class="help">Для восстановления нужны резервные копии плагина. Если файл изменился после применения, плагин откажется его перезаписывать. Каждый файл изменяется отдельно: общей транзакции для всех файлов нет.</p>
+          <div id="result" class="preview" role="status" aria-live="polite" hidden><h3 id="result-title"></h3><ul id="result-items" class="change-list"></ul><ul id="result-warnings" class="warnings" hidden></ul><ul id="result-failures" class="warnings" hidden></ul></div>
+          <p class="help">Для восстановления нужны резервные копии плагина. Если файл изменился после применения, плагин обновит в нём только свой маршрут WikiVibe и сохранит остальные настройки, а восстановление такого файла откажет. Файлы, созданные плагином, перезаписываются только без последующих изменений. Каждый агент изменяется отдельно: ошибка одного агента не мешает остальным.</p>
         </section>
       </div>
       <footer class="footnote"><p><strong>Настройки действуют для новых сессий.</strong> Перезапустите выбранный агент после применения или восстановления. Уже запущенные сессии не переключаются автоматически.</p><p>Плагин меняет только стандартные файлы в локальном домашнем каталоге. Настройки проекта, переменные окружения, параметры запуска, управляемые настройки и профиль Orca могут переопределить их. SSH и WSL не настраиваются. OpenCode JSONC поддерживается; сложные YAML/TOML и закрытые форматы не изменяются.</p><p>Удаление сохранённого ключа затрагивает только защищённое хранилище плагина в Orca. Файлы агентов и записанный в них ключ останутся на диске. Чтобы отменить изменения, используйте восстановление из резервных копий.</p><p><a href="https://github.com/taranttoola-create/wikivibe-orca-plugin" target="_blank" rel="noopener noreferrer">Исходный код и инструкция</a></p></footer>
@@ -228,7 +229,7 @@
         else if (modelsBase !== $('base-url').value) $('preferences-hint').textContent = 'Адрес API изменён. Обновите список моделей перед сохранением.';
         else if (preferencesDirty()) $('preferences-hint').textContent = 'Есть несохранённые настройки. Сохраните их перед просмотром и применением.';
         else if (!state.models.length) $('preferences-hint').textContent = 'Обновите доступные модели перед применением к агентам.';
-        else $('preferences-hint').textContent = 'Адрес сохранён. Провайдер и доступные модели будут добавлены только после применения. Затем выберите модель в агенте.';
+        else $('preferences-hint').textContent = 'Адрес сохранён. Ранее настроенные плагином агенты обновляются при сохранении ключа или адреса. Новые агенты добавляются только после подтверждения применения.';
       }
 
       function invalidatePreview() {
@@ -237,6 +238,7 @@
         $('consent').checked = false;
         $('changes').replaceChildren();
         $('preview-warnings').replaceChildren();
+        $('preview-failures').replaceChildren();
       }
 
       function hideResult() { $('result').hidden = true; }
@@ -274,7 +276,7 @@
           body.className = 'agent-body';
           const title = document.createElement('span');
           title.className = 'agent-title';
-          title.textContent = agent.label;
+          title.textContent = agent.label + (agent.managed ? ' · Настроен плагином' : '');
           const description = document.createElement('span');
           description.className = 'agent-description';
           description.textContent = (agent.description || '') + (agent.available ? '' : ' · Конфигурация не поддерживается');
@@ -355,6 +357,22 @@
         }
         list.hidden = !list.children.length;
       }
+      // Blocked agents: the plugin keeps working on the others and reports why here.
+      function failures(list, items) {
+        list.replaceChildren();
+        for (const item of items || []) {
+          const agent = state.agents.find(entry => entry.id === item.agentId);
+          const label = agent ? agent.label : item.agentId;
+          const row = document.createElement('li');
+          const name = document.createElement('strong');
+          name.textContent = label + ': ';
+          const reason = document.createElement('span');
+          reason.textContent = item.message.startsWith(label + ': ') ? item.message.slice(label.length + 2) : item.message;
+          row.append(name, reason);
+          list.append(row);
+        }
+        list.hidden = !list.children.length;
+      }
       function renderAccount(account) {
         const list = $('usage-values');
         list.replaceChildren();
@@ -398,7 +416,7 @@
 
       $('refresh-account').addEventListener('click', () => perform('Обновляются данные аккаунта…', refreshAccount));
 
-      function result(title, items, notes) {
+      function result(title, items, notes, blocked) {
         $('result-title').textContent = title;
         $('result-items').replaceChildren();
         for (const item of items) {
@@ -413,7 +431,17 @@
           $('result-items').append(row);
         }
         warnings($('result-warnings'), notes);
+        failures($('result-failures'), blocked);
         $('result').hidden = false;
+      }
+
+      function savedResult(data) {
+        const sync = data.sync;
+        const blocked = sync.failures || [];
+        if (sync.applied.length || blocked.length) result(blocked.length ? 'Настройки сохранены; есть ошибки синхронизации' : 'Настройки сохранены; файлы агентов обновлены', sync.applied, sync.warnings, blocked);
+        const updated = sync.outcomes.length;
+        const text = 'Ключ и адрес сохранены в Orca. ' + (blocked.length ? 'Не все агенты обновлены: причины указаны ниже. ' : '') + (updated ? 'Обновлено агентов: ' + updated + '. Настройки действуют для новых сессий; меню моделей не проверено.' : blocked.length ? 'Полное обновление ни одного агента не подтверждено.' : 'Ранее настроенных плагином агентов нет. Новые агенты не изменены.');
+        message(text, blocked.length ? 'error' : 'success');
       }
 
       async function load() {
@@ -446,10 +474,11 @@
         invalidatePreview();
         hideResult();
         perform('Проверяется доступ к API и сохраняется ключ…', async () => {
-          try { renderState(await api('/api/connect', { apiKey: key, baseUrl })); }
+          let data;
+          try { data = await api('/api/connect', { apiKey: key, baseUrl }); renderState(data); }
           finally { key = ''; }
           await refreshAccount();
-          message('Ключ проверен и сохранён в зашифрованном хранилище Orca. Загружены все доступные этому ключу модели. Запросы к моделям и совместимость с протоколами агентов не проверялись.', 'success');
+          savedResult(data);
         }, { connect: true });
       });
 
@@ -481,8 +510,9 @@
         invalidatePreview();
         hideResult();
         perform('Проверяется доступ и сохраняется адрес API…', async () => {
-          renderState(await api('/api/preferences', { baseUrl }));
-          message('Настройки сохранены. Чтобы изменить файлы агентов, посмотрите изменения и подтвердите применение.', 'success');
+          const data = await api('/api/preferences', { baseUrl });
+          renderState(data);
+          savedResult(data);
         });
       });
 
@@ -513,13 +543,14 @@
             $('changes').append(row);
           }
           warnings($('preview-warnings'), data.warnings);
+          failures($('preview-failures'), data.failures);
           state.models = data.models;
           modelsBase = state.baseUrl;
           renderModels(data.models);
           $('preview-settings').textContent = 'Провайдер: WikiVibe · Доступно моделей: ' + data.models.length + ' · Адрес API: ' + state.baseUrl + '. При применении список проверяется заново; модель выберите в агенте.';
           previewIds = data.changes.length ? agentIds : null;
           $('preview').hidden = false;
-          message(data.changes.length ? 'Предварительный просмотр готов. Файлы пока не изменены. Для применения подтвердите запись ключа и изменения ниже.' : 'Изменений нет. Выберите других агентов с поддерживаемым форматом конфигурации.');
+          message(data.changes.length ? (data.failures?.length ? 'Предварительный просмотр готов. Часть выбранных агентов изменить нельзя: причины указаны ниже. Файлы пока не изменены.' : 'Предварительный просмотр готов. Файлы пока не изменены. Для применения подтвердите запись ключа и изменения ниже.') : data.failures?.length ? 'Изменений нет: все выбранные агенты пропущены. Причины указаны ниже.' : 'Изменений нет. Выберите других агентов с поддерживаемым форматом конфигурации.');
         });
       });
       $('consent').addEventListener('change', updateControls);
@@ -533,11 +564,15 @@
           state.models = data.models;
           modelsBase = state.baseUrl;
           renderModels(data.models);
-          result('Файлы обновлены; меню агента не проверено', data.applied, [...data.warnings, ...(data.outcomes || []).map(item => {
+          const blocked = data.failures || [];
+          const title = !blocked.length ? 'Файлы обновлены; меню агента не проверено' : data.applied.length ? 'Часть файлов обновлена; меню агента не проверено' : 'Файлы не обновлены';
+          result(title, data.applied, [...data.warnings, ...(data.outcomes || []).map(item => {
             const agent = state.agents.find(entry => entry.id === item.agentId);
             return (agent?.label || item.agentId) + ': записан каталог из ' + item.modelCount + ' моделей. Видимость в меню не проверена. ' + item.nextStep;
-          })]);
-          message('Обработка завершена. Проверьте результат и предупреждения ниже. Запустите новые сессии агентов и выберите модель у провайдера WikiVibe способом, который поддерживает ваш агент.', 'success');
+          })], blocked);
+          if (!data.applied.length) message(blocked.length ? 'Ни один агент не обновлён: причины указаны ниже. Ключ в файлах агентов не изменён.' : 'Ни один файл не изменён: применять нечего.', 'error');
+          else if (blocked.length) message('Часть агентов обновлена, остальные пропущены: причины указаны ниже. Запустите новые сессии обновлённых агентов.', 'success');
+          else message('Обработка завершена. Проверьте результат и предупреждения ниже. Запустите новые сессии агентов и выберите модель у провайдера WikiVibe способом, который поддерживает ваш агент.', 'success');
         });
       });
 
@@ -566,8 +601,11 @@
         if (action.kind === 'restore') {
           perform('Восстанавливаются конфигурации из резервных копий…', async () => {
             const data = await api('/api/restore', { agentIds: action.agentIds, confirmed: true });
-            result('Восстановленные файлы', data.restored, data.warnings);
-            message(data.restored.length ? 'Восстановление завершено. Запустите новые сессии выбранных агентов.' : 'Файлы не восстановлены. Доступных резервных копий для выбранных агентов нет.', data.restored.length ? 'success' : 'info');
+            const blocked = data.failures || [];
+            result(blocked.length && !data.restored.length ? 'Файлы не восстановлены' : 'Восстановленные файлы', data.restored, data.warnings, blocked);
+            if (!data.restored.length) message(blocked.length ? 'Файлы не восстановлены: причины указаны ниже. Изменённые после применения файлы плагин не перезаписывает.' : 'Файлы не восстановлены. Доступных резервных копий для выбранных агентов нет.', 'info');
+            else if (blocked.length) message('Часть файлов восстановлена, остальные пропущены: причины указаны ниже.', 'success');
+            else message('Восстановление завершено. Запустите новые сессии выбранных агентов.', 'success');
           });
         } else {
           perform('Удаляется сохранённый ключ из хранилища плагина в Orca…', async () => {

@@ -40,6 +40,17 @@ async function reject(promise, message) {
     return true;
   });
 }
+// Blocked agents are reported per agent instead of failing the whole request.
+function failed(result, message) {
+  const list = result.failures ?? [];
+  assert.ok(list.length, 'ожидалась ошибка агента');
+  for (const item of list) {
+    assert.match(item.message, message);
+    assert.doesNotMatch(item.message, /wv-test-key-42|sk-[A-Za-z0-9]/);
+  }
+  assert.deepEqual(result.applied ?? result.restored ?? result.changes, []);
+  return list;
+}
 
 test.afterEach(async () => {
   await Promise.all(homes.splice(0).map(root => rm(root, { recursive: true, force: true })));
@@ -195,12 +206,12 @@ test('Qwen settings preserves unrelated provider and restores after writing env 
   assert.equal(await get(root, '.qwen/settings.json'), original);
 });
 
-test('restore refuses later user edits and leaves them untouched', async () => {
+test('restore reports later user edits as a failure and leaves them untouched', async () => {
   const root = await home();
   const file = await put(root, '.claude/settings.json', '{"permissions":{"allow":["Read"]}}\n');
   await applyAgents(['claude'], value, { home: root });
   await writeFile(file, '{"permissions":{"allow":["Read","Write"]}}\n', { mode: 0o600 });
-  await reject(restoreAgents(['claude'], { home: root }), /конфликт/i);
+  failed(await restoreAgents(['claude'], { home: root }), /конфликт/i);
   assert.match(await get(root, '.claude/settings.json'), /Write/);
 });
 
@@ -213,11 +224,11 @@ test('new config restore removes only plugin-created files', async () => {
   await assert.rejects(get(root, '.aider.model.metadata.json'), { code: 'ENOENT' });
 });
 
-test('refuses malformed JSON without exposing key or mutating file', async () => {
+test('reports malformed JSON as a failure without exposing key or mutating file', async () => {
   const root = await home();
   const malformed = '{"old":"unterminated}\n';
   await put(root, '.claude/settings.json', malformed);
-  await reject(applyAgents(['claude'], value, { home: root }), /корректный JSON/);
+  failed(await applyAgents(['claude'], value, { home: root }), /корректный JSON/);
   assert.equal(await get(root, '.claude/settings.json'), malformed);
 });
 
@@ -262,10 +273,10 @@ test('synchronizes existing OpenCode JSONC provider without changing routing, se
   assert.deepEqual(Object.keys(changed.provider.wikiwibe.models), value.models.map(row => row.id));
   assert.equal(changed.provider.wikiwibe.models['wv-code-1'].name, 'Custom');
   assert.ok(changedText.includes('// user comment'));
-  await reject(applyAgents(['opencode'], value, { home: root }).then(async () => {
-    await put(root, '.config/opencode/opencode.jsonc', changedText + '// later edit\n');
-    return restoreAgents(['opencode'], { home: root });
-  }), /конфликт/);
+  await applyAgents(['opencode'], value, { home: root });
+  await put(root, '.config/opencode/opencode.jsonc', changedText + '// later edit\n');
+  failed(await restoreAgents(['opencode'], { home: root }), /конфликт/);
+  assert.match(await get(root, '.config/opencode/opencode.jsonc'), /later edit/);
 });
 
 test('routes GPT through Responses and retains image models without pretending tool support', async () => {
@@ -402,7 +413,7 @@ test('existing filters admit all 14 authorized models, preserve user entries, an
   for (const [rel, bytes] of Object.entries(originals)) assert.equal(await get(root, rel), bytes);
 });
 
-test('filter files retain conflict protection and prevent earlier writes', async () => {
+test('filter files merge into edited files and retain rollback protection', async () => {
   for (const [id, rel, original, modelRel] of [
     ['pi', '.pi/agent/settings.json', '{"enabledModels":["other/*"]}\n', '.pi/agent/models.json'],
     ['omp', '.omp/agent/config.yml', 'enabledModels:\n  - other/*\n', '.omp/agent/models.yml']
@@ -410,17 +421,25 @@ test('filter files retain conflict protection and prevent earlier writes', async
     const root = await home();
     await put(root, rel, original);
     await applyAgents([id], value, { home: root });
-    const models = await get(root, modelRel);
     const edited = `${await get(root, rel)}\n`;
     await writeFile(path.join(root, rel), edited);
-    await reject(applyAgents([id], { ...value, models: [{ id: 'new' }] }, { home: root }), /конфликт/i);
-    await reject(restoreAgents([id], { home: root }), /конфликт/i);
-    assert.equal(await get(root, rel), edited);
-    assert.equal(await get(root, modelRel), models);
+    const applied = await applyAgents([id], { ...value, models: [{ id: 'new' }] }, { home: root });
+    assert.deepEqual([...new Set(applied.applied.map(item => item.agentId))], [id]);
+    assert.deepEqual(applied.failures, []);
+    const merged = await get(root, rel);
+    assert.match(merged, /other\/\*/, 'пользовательская запись сохраняется');
+    // Plugin entries written before the edit are still present: the merge builds
+    // on the edited file instead of regenerating it from the original.
+    assert.match(merged, /wikivibe\/wv-code-1/);
+    assert.equal(merged.split('wikivibe/new').length - 1, 1, 'новая модель добавляется один раз');
+    // Exact output ownership must never permit discarding later user edits.
+    const restored = await restoreAgents([id], { home: root });
+    assert.equal(restored.failures.length, 1);
+    assert.equal(await get(root, rel), merged);
   }
 });
 
-test('ambiguous filters refuse the whole plan instead of dropping restrictions', async () => {
+test('ambiguous filters block their agent instead of dropping restrictions', async () => {
   for (const [id, rel, bytes, modelRel] of [
     ['claude', '.claude/settings.json', '{"availableModels":"user"}\n', '.pi/agent/models.json'],
     ['opencode', '.config/opencode/opencode.json', '{"disabled_providers":[null]}\n', '.pi/agent/models.json'],
@@ -430,7 +449,10 @@ test('ambiguous filters refuse the whole plan instead of dropping restrictions',
   ]) {
     const root = await home();
     await put(root, rel, bytes);
-    await assert.rejects(applyAgents([id], value, { home: root }));
+    const result = await applyAgents([id], value, { home: root });
+    assert.deepEqual(result.applied, []);
+    assert.equal(result.failures.length, 1);
+    assert.equal(result.failures[0].agentId, id);
     assert.equal(await get(root, rel), bytes);
     await assert.rejects(get(root, modelRel), { code: 'ENOENT' });
   }
@@ -444,6 +466,19 @@ test('OMP empty provider and model scopes stay unrestricted and single disabled 
   assert.equal(await get(root, '.omp/agent/config.yml'), 'enabledModels: []\nenabledProviders: []\ndisabledProviders: []\n');
   await restoreAgents(['omp'], { home: root });
   assert.equal(await get(root, '.omp/agent/config.yml'), original);
+});
+
+test('OMP filters use the existing WikiVibe provider alias', async () => {
+  const root = await home();
+  await put(root, '.omp/agent/models.yml', 'providers:\n  wiki_alias:\n    baseUrl: https://api.wikivibe.dev/v1\n    apiKey: old\n');
+  await put(root, '.omp/agent/config.yml', 'enabledModels: [other/model]\nenabledProviders: [other]\ndisabledProviders: [wiki_alias, blocked]\n');
+  const result = await applyAgents(['omp'], value, { home: root });
+  assert.deepEqual(result.failures, []);
+  const { parse } = await import('yaml');
+  const config = parse(await get(root, '.omp/agent/config.yml'));
+  assert.deepEqual(config.enabledProviders, ['other', 'wiki_alias']);
+  assert.deepEqual(config.disabledProviders, ['blocked']);
+  assert.deepEqual(config.enabledModels, ['other/model', ...value.models.map(({ id }) => `wiki_alias/${id}`)]);
 });
 
 test('catalog ownership conflicts preserve user files and prevent earlier writes in the same plan', async () => {
@@ -462,21 +497,83 @@ test('catalog ownership conflicts preserve user files and prevent earlier writes
   for (const [id, rel, bytes] of cases) {
     const root = await home();
     await put(root, rel, bytes);
-    await assert.rejects(applyAgents([id], value, { home: root }));
+    const result = await applyAgents([id], value, { home: root });
+    assert.deepEqual(result.applied, []);
+    assert.equal(result.failures.length, 1);
+    assert.equal(result.failures[0].agentId, id);
     assert.equal(await get(root, rel), bytes);
     if (rel !== '.codex/config.toml') await assert.rejects(get(root, '.codex/config.toml'), { code: 'ENOENT' });
     if (id === 'aider') await assert.rejects(get(root, '.aider.conf.yml'), { code: 'ENOENT' });
   }
 });
 
-test('refresh refuses edited catalog files and keeps previous credentials and all user edits', async () => {
+test('an edit outside the provider block never blocks key rotation', async () => {
+  const root = await home();
+  const original = 'model = "user"\nmodel_provider = "openai"\n';
+  await put(root, '.codex/config.toml', original);
+  await applyAgents(['codex'], value, { home: root });
+  // Codex rewrites unrelated keys such as the selected model by itself.
+  const applied = await get(root, '.codex/config.toml');
+  await writeFile(path.join(root, '.codex/config.toml'), applied.replace('model = "user"', 'model = "gpt-5.6-luna"'), { mode: 0o600 });
+  const rotated = { ...value, apiKey: 'wv-rotated-key-77' };
+  const result = await applyAgents(['codex'], rotated, { home: root });
+  assert.deepEqual([...new Set(result.applied.map(item => item.agentId))], ['codex']);
+  assert.deepEqual(result.failures, []);
+  const changed = await get(root, '.codex/config.toml');
+  assert.match(changed, /model = "gpt-5\.6-luna"/);
+  assert.match(changed, /experimental_bearer_token = "wv-rotated-key-77"/);
+  assert.doesNotMatch(changed, new RegExp(value.apiKey));
+  assert.match(changed, /wire_api = "responses"/);
+  // Only the plugin's own block is rewritten; every other line survives.
+  assert.ok(changed.startsWith('model = "gpt-5.6-luna"\nmodel_provider = "openai"\n'));
+  assert.deepEqual(JSON.parse(await get(root, '.codex/wikivibe-models.json')).models.map(model => model.slug), value.models.map(model => model.id));
+});
+
+test('a blocked agent is reported while the rest of the selection is applied', async () => {
+  const root = await home();
+  await put(root, '.codex/config.toml', 'model = "user"\n');
+  await applyAgents(['codex', 'opencode', 'omp'], value, { home: root });
+  await writeFile(path.join(root, '.codex/wikivibe-models.json'), '{"models":[],"user":"keep"}\n');
+  const rotated = { ...value, apiKey: 'wv-rotated-key-77' };
+  const preview = await previewAgents(['codex', 'opencode', 'omp'], rotated, { home: root });
+  assert.deepEqual(preview.failures.map(item => item.agentId), ['codex']);
+  assert.match(preview.failures[0].message, /конфликт/i);
+  assert.deepEqual([...new Set(preview.changes.map(change => change.agentId))], ['opencode', 'omp']);
+  const result = await applyAgents(['codex', 'opencode', 'omp'], rotated, { home: root });
+  assert.deepEqual([...new Set(result.applied.map(item => item.agentId))], ['opencode', 'omp']);
+  assert.deepEqual(result.failures.map(item => item.agentId), ['codex']);
+  assert.deepEqual(result.outcomes.map(item => item.agentId), ['opencode', 'omp']);
+  assert.match(await get(root, '.config/opencode/opencode.json'), /wv-rotated-key-77/);
+  assert.match(await get(root, '.omp/agent/models.yml'), /wv-rotated-key-77/);
+  assert.doesNotMatch(await get(root, '.codex/config.toml'), /wv-rotated-key-77/);
+  assert.equal(await get(root, '.codex/wikivibe-models.json'), '{"models":[],"user":"keep"}\n');
+});
+
+test('Pi and Qwen retain custom model fields across repeated key rotations', async () => {
+  const root = await home();
+  await applyAgents(['pi', 'qwen'], value, { home: root });
+  for (const [id, rel] of [['pi', '.pi/agent/models.json'], ['qwen', '.qwen/settings.json']]) {
+    const config = JSON.parse(await get(root, rel));
+    const row = id === 'pi' ? config.providers.wikivibe.models[0] : config.modelProviders.openai[0];
+    row.contextWindow = 12345;
+    await writeFile(path.join(root, rel), JSON.stringify(config));
+  }
+  for (const apiKey of ['rotated-1', 'rotated-2']) {
+    const result = await applyAgents(['pi', 'qwen'], { ...value, apiKey }, { home: root });
+    assert.deepEqual(result.failures, []);
+    assert.equal(JSON.parse(await get(root, '.pi/agent/models.json')).providers.wikivibe.models[0].contextWindow, 12345);
+    assert.equal(JSON.parse(await get(root, '.qwen/settings.json')).modelProviders.openai[0].contextWindow, 12345);
+  }
+});
+
+test('refresh reports an edited generated catalog as a blocked agent and keeps all user edits', async () => {
   const root = await home();
   await applyAgents(['codex'], value, { home: root });
   const changed = '{"models":[],"user":"keep"}\n';
   await writeFile(path.join(root, '.codex/wikivibe-models.json'), changed);
   const config = await get(root, '.codex/config.toml');
-  await reject(applyAgents(['codex'], { ...value, models: [{ id: 'new' }] }, { home: root }), /конфликт/i);
-  await reject(restoreAgents(['codex'], { home: root }), /конфликт/i);
+  failed(await applyAgents(['codex'], { ...value, models: [{ id: 'new' }] }, { home: root }), /конфликт/i);
+  failed(await restoreAgents(['codex'], { home: root }), /конфликт/i);
   assert.equal(await get(root, '.codex/wikivibe-models.json'), changed);
   assert.equal(await get(root, '.codex/config.toml'), config);
 });
@@ -544,7 +641,7 @@ test('refuses catalog symlinks and hard links without altering their targets', a
     const target = await put(root, 'user-catalog.json', original, 0o600);
     await mkdir(path.join(root, '.codex'), { mode: 0o700 });
     await alias(target, path.join(root, '.codex/wikivibe-models.json'));
-    await reject(applyAgents(['codex'], value, { home: root }), /Небезопасный путь/);
+    failed(await applyAgents(['codex'], value, { home: root }), /Небезопасный путь/);
     assert.equal(await get(root, 'user-catalog.json'), original);
     await assert.rejects(get(root, '.codex/config.toml'), { code: 'ENOENT' });
   }
@@ -560,8 +657,8 @@ test('rejects executable credentials, unsafe backup modes, and an existing mutat
   await applyAgents(['codex'], value, { home: root });
   const original = await get(root, '.codex/wikivibe-models.json');
   await chmod(path.join(root, '.codex/.wikivibe-gateway-backups/wikivibe-models.json.json'), 0o644);
-  await reject(applyAgents(['codex'], { ...value, models: [{ id: 'new' }] }, { home: root }), /права резервной/);
-  await reject(restoreAgents(['codex'], { home: root }), /права резервной/);
+  failed(await applyAgents(['codex'], { ...value, models: [{ id: 'new' }] }, { home: root }), /права резервной/);
+  failed(await restoreAgents(['codex'], { home: root }), /права резервной/);
   assert.equal(await get(root, '.codex/wikivibe-models.json'), original);
 });
 
@@ -581,14 +678,17 @@ test('fresh provider installation never creates selected-model settings', async 
   assert.doesNotMatch(await get(root, '.codex/wikivibe.config.toml'), /^model\s*=/m);
 });
 
-test('legacy default cleanup refuses later user changes before applying the new provider', async () => {
+test('legacy default cleanup skips an edited file and still installs the provider', async () => {
   const root = await home();
   await legacy(root, 'pi', '.pi/agent/settings.json', '{"defaultModel":"user"}\n', '{"defaultModel":"old-plugin","defaultProvider":"wikivibe"}\n');
   const user = '{"defaultModel":"new-user-choice"}\n';
   await writeFile(path.join(root, '.pi/agent/settings.json'), user);
-  await reject(applyAgents(['pi'], value, { home: root }), /конфликт/i);
+  const applied = await applyAgents(['pi'], value, { home: root });
+  assert.deepEqual([...new Set(applied.applied.map(item => item.agentId))], ['pi']);
+  assert.deepEqual(applied.failures, []);
+  // No enabledModels list to extend: the edited file stays exactly as the user left it.
   assert.equal(await get(root, '.pi/agent/settings.json'), user);
-  await assert.rejects(get(root, '.pi/agent/models.json'), { code: 'ENOENT' });
+  assert.deepEqual(JSON.parse(await get(root, '.pi/agent/models.json')).providers.wikivibe.models, value.models);
 });
 
 test('restores YAML spelling and rolls back originally absent legacy defaults', async () => {

@@ -29,6 +29,64 @@ async function configFile(home, rel, value) {
 
 const response = ids => Response.json({ data: ids.map(id => ({ id })) });
 
+test('connect rotates only opted-in agents, preserves edits, isolates failures and reports saved separately', async t => {
+  const { service, stores, home } = await setup(t, async () => response(['allowed']));
+  const untouched = await configFile(home, '.qwen/settings.json', { env: { WIKIVIBE_API_KEY: 'user-owned' } });
+  const before = await readFile(untouched, 'utf8');
+  await service.request('connect', { apiKey: 'old-fixture', baseUrl: ENDPOINTS[0] });
+  await service.request('apply', { agentIds: ['opencode', 'pi', 'codex'], confirmed: true });
+  const file = join(home, '.config/opencode/opencode.json');
+  const config = JSON.parse(await readFile(file, 'utf8'));
+  config.model = 'other/custom';
+  config.provider.wikivibe.options.timeout = 123;
+  await writeFile(file, JSON.stringify(config));
+  const blocked = join(home, '.codex/wikivibe-models.json');
+  await writeFile(blocked, '{"models":[],"user":"keep"}');
+  const result = await service.request('connect', { apiKey: 'new-fixture', baseUrl: ENDPOINTS[1] });
+  const updated = JSON.parse(await readFile(file, 'utf8'));
+  assert.equal(updated.provider.wikivibe.options.apiKey, 'new-fixture');
+  assert.equal(updated.provider.wikivibe.options.baseURL, ENDPOINTS[1]);
+  assert.equal(updated.provider.wikivibe.options.timeout, 123);
+  assert.equal(updated.model, 'other/custom');
+  assert.equal(JSON.parse(await readFile(join(home, '.pi/agent/models.json'), 'utf8')).providers.wikivibe.apiKey, 'new-fixture');
+  assert.equal(stores.secrets.get('apiKey'), 'new-fixture');
+  assert.equal(result.saved, true);
+  assert.deepEqual(result.sync.failures.map(item => item.agentId), ['codex']);
+  assert.deepEqual(result.sync.outcomes.map(item => item.agentId), ['opencode', 'pi']);
+  assert.equal(await readFile(untouched, 'utf8'), before);
+  assert.equal(await readFile(blocked, 'utf8'), '{"models":[],"user":"keep"}');
+  assert.equal(JSON.stringify(result).includes('new-fixture'), false);
+  // A later sync must not regenerate away edits, and restore must not discard them.
+  await service.request('preferences', { baseUrl: ENDPOINTS[0] });
+  assert.equal(JSON.parse(await readFile(file, 'utf8')).model, 'other/custom');
+  const restore = await service.request('restore', { agentIds: ['opencode'], confirmed: true });
+  assert.equal(restore.failures.length, 1);
+  assert.equal(JSON.parse(await readFile(file, 'utf8')).model, 'other/custom');
+});
+
+test('failed connect leaves managed agent credentials unchanged', async t => {
+  let denied = false;
+  const { service, home } = await setup(t, async () => denied ? new Response('', { status: 401 }) : response(['allowed']));
+  await service.request('connect', { apiKey: 'old-fixture', baseUrl: ENDPOINTS[0] });
+  await service.request('apply', { agentIds: ['opencode'], confirmed: true });
+  const file = join(home, '.config/opencode/opencode.json');
+  const before = await readFile(file, 'utf8');
+  denied = true;
+  await assert.rejects(service.request('connect', { apiKey: 'new-fixture', baseUrl: ENDPOINTS[1] }));
+  assert.equal(await readFile(file, 'utf8'), before);
+});
+
+test('invalid backup marker cannot enroll an unmanaged config during connect', async t => {
+  const { service, home } = await setup(t, async () => response(['allowed']));
+  const marker = join(home, '.config/opencode/.wikivibe-gateway-backups/opencode.jsonc.json');
+  await mkdir(dirname(marker), { recursive: true, mode: 0o700 });
+  await writeFile(marker, '{}', { mode: 0o600 });
+  const result = await service.request('connect', { apiKey: 'fixture', baseUrl: ENDPOINTS[0] });
+  assert.equal(result.saved, true);
+  assert.deepEqual(result.sync.failures.map(item => item.agentId), ['opencode']);
+  await assert.rejects(readFile(join(home, '.config/opencode/opencode.json')), { code: 'ENOENT' });
+});
+
 test('connect uses only the authenticated accessible roster and persists the endpoint alone', async t => {
   const calls = [];
   const { service, stores } = await setup(t, async (url, options) => {
@@ -40,7 +98,7 @@ test('connect uses only the authenticated accessible roster and persists the end
   const state = await service.request('connect', { apiKey: 'fixture-key', baseUrl: ENDPOINTS[0], model: 'group-a' });
   assert.deepEqual(calls, [{ url: `${ENDPOINTS[0]}/models`, authorization: 'Bearer fixture-key' }]);
   assert.deepEqual(state.models, [{ id: 'group-a' }, { id: 'group-b' }]);
-  assert.deepEqual(Object.keys(state).sort(), ['agents', 'baseUrl', 'connected', 'models', 'registrationUrl']);
+  assert.deepEqual(Object.keys(state).sort(), ['agents', 'baseUrl', 'connected', 'models', 'registrationUrl', 'saved', 'sync']);
   assert.deepEqual(stores.storage.get('preferences'), { baseUrl: ENDPOINTS[0] });
   assert.equal(stores.secrets.get('apiKey'), 'fixture-key');
   assert.equal(JSON.stringify(state).includes('fixture-key'), false);
@@ -187,14 +245,17 @@ test('revoked authentication blocks apply even after a successful preview', asyn
   assert.equal(await readFile(path, 'utf8'), before);
 });
 
-test('restore still refuses user edits made after provider application', async t => {
+test('restore reports user edits made after provider application and leaves the file untouched', async t => {
   const { service, home } = await setup(t, async () => response(['a']));
   const path = await configFile(home, '.config/opencode/opencode.json', { model: 'other/active' });
   await service.request('connect', { apiKey: 'fixture', baseUrl: ENDPOINTS[0] });
   await service.request('apply', { agentIds: ['opencode'], confirmed: true });
   const edited = (await readFile(path, 'utf8')) + '\n';
   await writeFile(path, edited);
-  await assert.rejects(service.request('restore', { agentIds: ['opencode'], confirmed: true }));
+  const result = await service.request('restore', { agentIds: ['opencode'], confirmed: true });
+  assert.deepEqual(result.restored, []);
+  assert.deepEqual(result.failures.map(item => item.agentId), ['opencode']);
+  assert.match(result.failures[0].message, /конфликт/i);
   assert.equal(await readFile(path, 'utf8'), edited);
 });
 

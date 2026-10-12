@@ -47,6 +47,10 @@ function preferences(value, secret = false) {
   if (secret && (typeof value.apiKey !== 'string' || !value.apiKey.trim() || value.apiKey.length > 4096 || /[\s\x00-\x1f\x7f$]/.test(value.apiKey) || value.apiKey.startsWith('!') || /^[A-Z_][A-Z0-9_]*$/.test(value.apiKey))) fail('API-ключ должен содержать само значение ключа, а не команду или имя переменной.');
 }
 function object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+// Refusal used whenever the plugin may not touch a file the user changed after applying.
+function conflict(label) {
+  return `${label}: конфликт с изменениями после применения. Восстановление и перезапись запрещены; ваши изменения сохранены.`;
+}
 function child(parent, key) {
   if (!own(parent, key)) parent[key] = {};
   if (!object(parent[key])) fail('Конфигурация содержит несовместимую структуру.');
@@ -67,9 +71,15 @@ function expandAllowlist(config, key, values, remove = false) {
   if (remove) config[key] = entries.filter(item => !values.includes(item));
   else config[key] = [...entries, ...values.filter(item => !entries.includes(item))];
 }
-function provider(parent, key, value) {
-  if (own(parent, key)) fail('Конфликт: поставщик wikivibe уже существует и не принадлежит плагину.');
-  parent[key] = value;
+function provider(parent, key, value, merge = false) {
+  // Merge may replace an existing provider only while it still routes to WikiVibe,
+  // which is what the plugin wrote before the file was edited.
+  if (own(parent, key) && !(merge && wikiRoute(parent[key]?.baseUrl))) fail('Конфликт: поставщик wikivibe уже существует и не принадлежит плагину.');
+  parent[key] = { ...(merge ? parent[key] : {}), ...value };
+}
+// Metadata entries the plugin itself wrote, safe to rewrite when merging.
+function pluginMetadata(value) {
+  return object(value) && value.litellm_provider === 'openai' && value.mode === 'chat' && Object.keys(value).length === 2;
 }
 
 function wikiRoute(url) {
@@ -102,7 +112,7 @@ function openCodeConfig(text, value) {
       ...entry,
       npm: '@ai-sdk/openai-compatible',
       name: 'WikiVibe',
-      options: { baseURL: value.baseUrl, apiKey: value.apiKey },
+      options: { ...entry?.options, baseURL: value.baseUrl, apiKey: value.apiKey },
       models
     });
   }
@@ -224,12 +234,12 @@ function yamlList(text, key) {
   }
   return result;
 }
-function addYamlAllowlist(text, models) {
+function addYamlAllowlist(text, models, providerId = 'wikivibe') {
   let next = text;
   for (const [key, values, remove] of [
-    ['enabledModels', models.map(({ id }) => `wikivibe/${id}`), false],
-    ['enabledProviders', ['wikivibe'], false],
-    ['disabledProviders', ['wikivibe'], true]
+    ['enabledModels', models.map(({ id }) => `${providerId}/${id}`), false],
+    ['enabledProviders', [providerId], false],
+    ['disabledProviders', [providerId], true]
   ]) {
     const entries = yamlList(next, key);
     if (entries === null || (!remove && entries.length === 0)) continue;
@@ -238,7 +248,7 @@ function addYamlAllowlist(text, models) {
   }
   return next;
 }
-function tomlConfig(text, value) {
+function tomlConfig(text, value, merge = false) {
   if (text.includes('"""') || text.includes("'''")) fail('Многострочные строки TOML не изменяются автоматически.');
   const newline = text.includes('\r\n') ? '\r\n' : '\n';
   const lines = text ? text.split(/\r?\n/) : [];
@@ -255,7 +265,24 @@ function tomlConfig(text, value) {
     if (/^\s*\[\s*model_providers\s*\.\s*(?:wikivibe(?=\s*(?:\.|\]))|["']wikivibe["'])/.test(lines[i])) matches.push(i);
     if (/^\s*\[\s*["']model_providers/.test(lines[i])) fail('Ключи поставщиков TOML в кавычках не изменяются.');
   }
-  if (matches.length) fail('Конфликт: поставщик wikivibe уже существует в TOML.');
+  if (matches.length > 1) fail('Несколько блоков model_providers.wikivibe в TOML; файл не изменён.');
+  if (matches.length) {
+    if (!merge) fail('Конфликт: поставщик wikivibe уже существует в TOML.');
+    // A file edited after the plugin wrote it cannot be regenerated from the
+    // original without dropping those edits, so only the plugin's own block is
+    // rewritten: the provider, wire protocol and endpoint must still be ours.
+    const start = matches[0];
+    let end = start + 1;
+    while (end < lines.length && !/^\s*\[/.test(lines[end])) end++;
+    const block = lines.slice(start, end);
+    const field = key => block.find(line => new RegExp(`^\\s*${key}\\s*=`).test(line));
+    const name = field('name'), base = field('base_url'), wire = field('wire_api'), token = field('experimental_bearer_token');
+    const endpoint = base?.trim().match(/^base_url\s*=\s*"([^"]*)"$/)?.[1];
+    if (!name || !base || !wire || !token || !/^name\s*=\s*"WikiVibe"$/.test(name.trim()) || !/^wire_api\s*=\s*"responses"$/.test(wire.trim()) || !ENDPOINTS.has(endpoint)) fail('Конфликт: поставщик wikivibe в TOML не принадлежит плагину; файл не изменён.');
+    block[block.indexOf(base)] = `base_url = ${JSON.stringify(value.baseUrl)}`;
+    block[block.indexOf(token)] = `experimental_bearer_token = ${JSON.stringify(value.apiKey)}`;
+    return `${[...lines.slice(0, start), ...block, ...lines.slice(end)].join(newline)}${newline}`;
+  }
   const block = ['[model_providers.wikivibe]', 'name = "WikiVibe"', `base_url = ${JSON.stringify(value.baseUrl)}`, 'wire_api = "responses"', `experimental_bearer_token = ${JSON.stringify(value.apiKey)}`];
   lines.push('', ...block);
   return `${lines.join(newline)}${newline}`;
@@ -275,26 +302,28 @@ function codexCatalog(models) {
     experimental_supported_tools: [], input_modalities: ['text']
   })) };
 }
-function render(agent, rel, bytes, value, root) {
+function render(agent, rel, bytes, value, root, merge = false, providerId = 'wikivibe') {
   const text = bytes?.toString('utf8') ?? '';
   if (agent.id === 'opencode') return openCodeConfig(text, value);
   if (agent.id === 'codex') {
+    // These two files exist only for the plugin: an edit inside them cannot be
+    // separated from plugin content, so an edited file is never overwritten.
     if (rel.endsWith('wikivibe-models.json')) {
-      if (bytes !== null) fail('Codex: файл wikivibe-models.json уже существует и не принадлежит плагину.');
+      if (bytes !== null) fail(merge ? conflict(agent.label) : 'Codex: файл wikivibe-models.json уже существует и не принадлежит плагину.');
       return json(codexCatalog(value.models));
     }
     if (rel.endsWith('wikivibe.config.toml')) {
-      if (bytes !== null) fail('Codex: профиль wikivibe уже существует и не принадлежит плагину.');
+      if (bytes !== null) fail(merge ? conflict(agent.label) : 'Codex: профиль wikivibe уже существует и не принадлежит плагину.');
       return `model_provider = "wikivibe"\nmodel_catalog_json = ${JSON.stringify(path.join(root, '.codex/wikivibe-models.json'))}\n`;
     }
-    return tomlConfig(text, value);
+    return tomlConfig(text, value, merge);
   }
   if (agent.id === 'aider') {
     if (rel.endsWith('.metadata.json')) {
       const metadata = parseJSON(bytes);
       for (const { id } of value.models) {
         const name = `openai/${id}`;
-        if (own(metadata, name)) fail('Aider: метаданные модели уже существуют и не принадлежат плагину.');
+        if (own(metadata, name) && !(merge && pluginMetadata(metadata[name]))) fail('Aider: метаданные модели уже существуют и не принадлежат плагину.');
         Object.defineProperty(metadata, name, { value: { litellm_provider: 'openai', mode: 'chat' }, enumerable: true });
       }
       return json(metadata);
@@ -304,7 +333,7 @@ function render(agent, rel, bytes, value, root) {
     return next;
   }
   if (agent.id === 'omp') {
-    if (/\/config\.ya?ml$/.test(rel)) return addYamlAllowlist(text, value.models);
+    if (/\/config\.ya?ml$/.test(rel)) return addYamlAllowlist(text, value.models, providerId);
     return ompModels(text, value);
   }
   const config = parseJSON(bytes);
@@ -314,7 +343,8 @@ function render(agent, rel, bytes, value, root) {
       if (own(config, 'apiKeyHelper') || own(env, 'ANTHROPIC_API_KEY') || Object.keys(env).some(key => key.startsWith('CLAUDE_CODE_USE_'))) fail('Claude Code: существующий apiKeyHelper, ANTHROPIC_API_KEY или настройка облачного поставщика конфликтует с WikiVibe; файл не изменён.');
       const picker = child(config, 'modelPicker');
       if (own(picker, 'options') && (!Array.isArray(picker.options) || picker.options.some(row => !object(row) || typeof row.model !== 'string'))) fail('Claude Code: modelPicker.options должен быть массивом моделей.');
-      const options = picker.options ?? [];
+      // Merge keeps the user's own picker rows and replaces only plugin-labelled ones.
+      const options = (picker.options ?? []).filter(row => !(merge && typeof row.label === 'string' && row.label.startsWith('WikiVibe · ')));
       if (options.some(row => value.models.some(model => model.id === row.model))) fail('Claude Code: модель уже существует в пользовательском modelPicker.');
       picker.options = [...options, ...value.models.map(({ id }) => ({ model: id, label: `WikiVibe · ${id}` }))];
       picker.replaceBuiltInOptions = true;
@@ -327,17 +357,23 @@ function render(agent, rel, bytes, value, root) {
       if (rel.endsWith('settings.json')) {
         expandAllowlist(config, 'enabledModels', value.models.map(({ id }) => `wikivibe/${id}`));
       } else {
-        provider(child(config, 'providers'), 'wikivibe', { baseUrl: value.baseUrl, api: 'openai-completions', apiKey: value.apiKey, models: value.models.map(({ id }) => ({ id })) });
+        const providers = child(config, 'providers');
+        const existing = merge ? providers.wikivibe?.models : [];
+        if (merge && existing !== undefined && !Array.isArray(existing)) fail('Pi: models должен быть массивом.');
+        provider(providers, 'wikivibe', { baseUrl: value.baseUrl, api: 'openai-completions', apiKey: value.apiKey, models: value.models.map(({ id }) => ({ ...existing?.find(row => row.id === id), id })) }, merge);
       }
       break;
     case 'qwen': {
       const providers = child(config, 'modelProviders');
       if (!own(providers, 'openai')) providers.openai = [];
       if (!Array.isArray(providers.openai) || providers.openai.some(entry => !object(entry))) fail('Qwen Code: modelProviders.openai должен быть массивом объектов.');
-      if (providers.openai.some(entry => entry.envKey === 'WIKIVIBE_API_KEY' || value.models.some(model => model.id === entry.id))) fail('Qwen Code: идентификатор модели или ключ уже используется другим поставщиком.');
-      providers.openai.push(...value.models.map(({ id }) => ({ id, name: `WikiVibe · ${id}`, baseUrl: value.baseUrl, envKey: 'WIKIVIBE_API_KEY' })));
+      // Merge drops the plugin's own entries (identified by its env key) and keeps the rest.
+      const kept = merge ? providers.openai.filter(entry => entry.envKey !== 'WIKIVIBE_API_KEY') : providers.openai;
+      if (kept.some(entry => entry.envKey === 'WIKIVIBE_API_KEY' || value.models.some(model => model.id === entry.id))) fail('Qwen Code: идентификатор модели или ключ уже используется другим поставщиком.');
+      const previous = merge ? providers.openai.filter(entry => entry.envKey === 'WIKIVIBE_API_KEY') : [];
+      providers.openai = [...kept, ...value.models.map(({ id }) => ({ ...previous.find(entry => entry.id === id), id, name: `WikiVibe · ${id}`, baseUrl: value.baseUrl, envKey: 'WIKIVIBE_API_KEY' }))];
       const env = child(config, 'env');
-      if (own(env, 'WIKIVIBE_API_KEY')) fail('Qwen Code: переменная WIKIVIBE_API_KEY уже существует.');
+      if (own(env, 'WIKIVIBE_API_KEY') && !merge) fail('Qwen Code: переменная WIKIVIBE_API_KEY уже существует.');
       env.WIKIVIBE_API_KEY = value.apiKey;
       break;
     }
@@ -466,31 +502,56 @@ async function nativePaths(root, agent) {
 }
 async function plans(root, agents, value, restore = false) {
   const result = [];
+  const failures = [];
   for (const agent of agents) {
-    // Restore looks at both supported YAML spellings, independent of which exists now.
-    const rels = restore ? agent.id === 'opencode' ? [agent.rel, '.config/opencode/opencode.jsonc'] : agent.id === 'omp' ? ['.omp/agent/models.yml', '.omp/agent/models.yaml', '.omp/agent/config.yml', '.omp/agent/config.yaml'] : agent.id === 'pi' ? [agent.rel, '.pi/agent/settings.json'] : agent.id === 'codex' ? [agent.rel, '.codex/wikivibe-models.json', '.codex/wikivibe.config.toml'] : agent.id === 'aider' ? [agent.rel, '.aider.model.metadata.json'] : [agent.rel] : await nativePaths(root, agent);
-    for (const rel of rels) {
-      const target = path.join(root, rel);
-      const current = await snapshot(root, target);
-      const backup = await readBackup(root, agent, rel, target);
-      if (backup && !owned(current, backup.record)) fail(`${agent.label}: конфликт с изменениями после применения. Восстановление и перезапись запрещены; ваши изменения сохранены.`);
-      if (restore) { if (backup) result.push({ agent, rel, target, current, backup }); continue; }
-      if (backup && backup.record.state !== 'active') fail('Незавершённая операция: сначала восстановите конфигурацию.');
-      const filters = agent.id === 'pi' && rel.endsWith('settings.json') || agent.id === 'omp' && /\/config\.ya?ml$/.test(rel);
-      // Owned files cannot have later edits (checked above), so regenerating from
-      // the original safely removes every stale plugin model and legacy default.
-      const baseline = backup ? backup.record.original === null ? null : Buffer.from(backup.record.original.base64, 'base64') : current?.bytes ?? null;
-      if (filters) {
-        const hasFilters = agent.id === 'pi' ? own(parseJSON(baseline), 'enabledModels') : ['enabledModels', 'enabledProviders', 'disabledProviders'].some(key => yamlList(baseline?.toString('utf8') ?? '', key) !== null);
-        if (!hasFilters) { if (backup) result.push({ agent, rel, target, current, backup, cleanup: true }); continue; }
+    const agentPlans = [];
+    try {
+      // Restore looks at both supported YAML spellings, independent of which exists now.
+      const rels = restore ? agent.id === 'opencode' ? [agent.rel, '.config/opencode/opencode.jsonc'] : agent.id === 'omp' ? ['.omp/agent/models.yml', '.omp/agent/models.yaml', '.omp/agent/config.yml', '.omp/agent/config.yaml'] : agent.id === 'pi' ? [agent.rel, '.pi/agent/settings.json'] : agent.id === 'codex' ? [agent.rel, '.codex/wikivibe-models.json', '.codex/wikivibe.config.toml'] : agent.id === 'aider' ? [agent.rel, '.aider.model.metadata.json'] : [agent.rel] : await nativePaths(root, agent);
+      for (const rel of rels) {
+        const target = path.join(root, rel);
+        const current = await snapshot(root, target);
+        const backup = await readBackup(root, agent, rel, target);
+        const exact = backup ? owned(current, backup.record) : false;
+        if (restore) {
+          if (backup && (!exact || backup.record.preserveEdits)) fail(conflict(agent.label));
+          if (backup) agentPlans.push({ agent, rel, target, current, backup });
+          continue;
+        }
+        if (backup && backup.record.state !== 'active') fail('Незавершённая операция: сначала восстановите конфигурацию.');
+        // Regenerating from the original removes stale plugin models and legacy
+        // defaults, but it would also drop later user edits. When the file is no
+        // longer exactly what the plugin wrote, the plan merges into the current
+        // file instead: unrelated edits must never block key rotation.
+        const merge = Boolean(backup) && (!exact || backup.record.preserveEdits === true);
+        if (merge && current === null) fail(`${agent.label}: файл удалён после применения. Восстановите резервную копию или создайте файл заново.`);
+        const filters = agent.id === 'pi' && rel.endsWith('settings.json') || agent.id === 'omp' && /\/config\.ya?ml$/.test(rel);
+        const baseline = backup && !merge ? backup.record.original === null ? null : Buffer.from(backup.record.original.base64, 'base64') : current?.bytes ?? null;
+        if (filters) {
+          const hasFilters = agent.id === 'pi' ? own(parseJSON(baseline), 'enabledModels') : ['enabledModels', 'enabledProviders', 'disabledProviders'].some(key => yamlList(baseline?.toString('utf8') ?? '', key) !== null);
+          if (!hasFilters) { if (backup && !merge) agentPlans.push({ agent, rel, target, current, backup, cleanup: true }); continue; }
+        }
+        let providerId = 'wikivibe';
+        if (agent.id === 'omp' && filters) {
+          const modelPlan = agentPlans.find(plan => /\/models\.ya?ml$/.test(plan.rel));
+          if (modelPlan) {
+            const config = parseDocument(modelPlan.bytes.toString('utf8')).toJS({ maxAliasCount: 0 });
+            providerId = Object.entries(config.providers).find(([, entry]) => wikiRoute(entry?.baseUrl))[0];
+          }
+        }
+        const bytes = Buffer.from(render(agent, rel, baseline, value, root, merge, providerId));
+        const backupDir = path.dirname(backupPath(root, target));
+        if (await directories(root, backupDir) && (await fs.lstat(backupDir)).mode % 512 !== 0o700) fail('Каталог резервных копий должен иметь права 0700.');
+        agentPlans.push({ agent, rel, target, current, backup, bytes, filters, merge });
       }
-      const bytes = Buffer.from(render(agent, rel, baseline, value, root));
-      const backupDir = path.dirname(backupPath(root, target));
-      if (await directories(root, backupDir) && (await fs.lstat(backupDir)).mode % 512 !== 0o700) fail('Каталог резервных копий должен иметь права 0700.');
-      result.push({ agent, rel, target, current, backup, bytes, filters });
+      result.push(...agentPlans);
+    } catch (error) {
+      // An agent is planned as a whole: one blocked or malformed file keeps its
+      // other files untouched, but never voids the rest of the selection.
+      failures.push({ agentId: agent.id, message: error instanceof Error ? error.message : 'Операция не выполнена.' });
     }
   }
-  return result;
+  return { plans: result, failures };
 }
 
 async function restorePlan(root, plan) {
@@ -529,47 +590,104 @@ async function mutation(home, operation) {
 
 export async function listAgents({ home = homedir() } = {}) {
   const root = path.resolve(home);
-  return AGENTS.map(({ rel, protocol, ...agent }) => ({ ...agent, available: true, configPath: path.join(root, rel) }));
+  return Promise.all(AGENTS.map(async ({ rel, protocol, ...agent }) => {
+    // Backup presence is the durable opt-in marker, not proof of effective routing.
+    let managed = false;
+    for (const file of managedPaths({ ...agent, rel })) {
+      try { await fs.lstat(backupPath(root, path.join(root, file))); managed = true; }
+      catch (error) { if (error.code !== 'ENOENT') managed = true; }
+    }
+    return { ...agent, available: true, managed, configPath: path.join(root, rel) };
+  }));
+}
+function managedPaths(agent) {
+  if (agent.id === 'opencode') return [agent.rel, '.config/opencode/opencode.jsonc'];
+  if (agent.id === 'omp') return ['.omp/agent/models.yml', '.omp/agent/models.yaml', '.omp/agent/config.yml', '.omp/agent/config.yaml'];
+  if (agent.id === 'codex') return [agent.rel, '.codex/wikivibe-models.json', '.codex/wikivibe.config.toml'];
+  if (agent.id === 'pi') return [agent.rel, '.pi/agent/settings.json'];
+  if (agent.id === 'aider') return [agent.rel, '.aider.model.metadata.json'];
+  return [agent.rel];
+}
+export async function syncManagedAgents(value, options = {}) {
+  const agents = (await listAgents(options)).filter(agent => agent.managed);
+  if (!agents.length) return { applied: [], failures: [], outcomes: [], warnings: [] };
+  const failures = [];
+  const eligible = [];
+  try {
+    const root = await homeRoot(options.home ?? homedir());
+    for (const agent of agents) {
+      const native = AGENTS.find(entry => entry.id === agent.id);
+      try {
+        const paths = await nativePaths(root, native);
+        let verified = false;
+        for (const rel of managedPaths(native)) {
+          const backup = await readBackup(root, native, rel, path.join(root, rel));
+          if (!backup) continue;
+          if (!paths.includes(rel)) fail('Путь управляемой конфигурации изменился; требуется ручное применение.');
+          verified = true;
+        }
+        if (!verified) fail('Не найдена действительная резервная копия плагина.');
+        eligible.push(agent.id);
+      } catch {
+        failures.push({ agentId: agent.id, message: 'Управляемая конфигурация или резервная копия недоступна либо изменила путь. Файлы агента не обновлены.' });
+      }
+    }
+    const result = eligible.length ? await applyAgents(eligible, value, options) : { applied: [], failures: [], outcomes: [], warnings: [] };
+    return { ...result, failures: [...failures, ...result.failures] };
+  }
+  catch {
+    return { applied: [], outcomes: [], warnings: [], failures: agents.map(agent => ({ agentId: agent.id, message: 'Настройки сохранены, но синхронизация недоступна. Повторите применение к агенту.' })) };
+  }
 }
 export async function previewAgents(agentIds, value, { home = homedir() } = {}) {
   const agents = selected(agentIds); preferences(value);
   const root = await homeRoot(home);
-  const changes = await plans(root, agents, { ...value, apiKey: value.apiKey ?? 'preview-redacted' });
-  return { changes: changes.map(plan => ({ agentId: plan.agent.id, path: plan.target, description: `${plan.agent.label}: ${plan.cleanup ? 'восстановление прежних настроек выбора' : plan.filters ? 'расширение фильтров только для WikiVibe' : 'установка полного доступного каталога'}, ${plan.agent.protocol}. Плагин сохранит резервную копию. Восстановление доступно, только если файл не изменится после применения.`, secretOnDisk: !plan.cleanup && !plan.filters && !plan.rel.endsWith('wikivibe-models.json') && !plan.rel.endsWith('wikivibe.config.toml') && !plan.rel.endsWith('.metadata.json') })), warnings: warnings(agents) };
+  const { plans: changes, failures } = await plans(root, agents, { ...value, apiKey: value.apiKey ?? 'preview-redacted' });
+  return { changes: changes.map(plan => ({ agentId: plan.agent.id, path: plan.target, description: `${plan.agent.label}: ${plan.cleanup ? 'восстановление прежних настроек выбора' : plan.merge ? 'обновление маршрута WikiVibe в изменённом файле, остальные настройки сохраняются' : plan.filters ? 'расширение фильтров только для WikiVibe' : 'установка полного доступного каталога'}, ${plan.agent.protocol}. Плагин сохранит резервную копию. Восстановление доступно, только если файл не изменится после применения.`, secretOnDisk: !plan.cleanup && !plan.filters && !plan.rel.endsWith('wikivibe-models.json') && !plan.rel.endsWith('wikivibe.config.toml') && !plan.rel.endsWith('.metadata.json') })), failures, warnings: warnings(agents) };
 }
 export async function applyAgents(agentIds, value, { home = homedir() } = {}) {
   const agents = selected(agentIds); preferences(value, true);
   return mutation(home, async root => {
-    const changes = await plans(root, agents, value);
+    const { plans: changes, failures } = await plans(root, agents, value);
     const applied = [];
+    const blocked = failures.slice();
     for (const plan of changes) {
-      if (plan.cleanup) { await restorePlan(root, plan); applied.push({ agentId: plan.agent.id, path: plan.target }); continue; }
-      const location = backupPath(root, plan.target);
-      await directories(root, path.dirname(location), true);
-      if ((await fs.lstat(path.dirname(location))).mode % 512 !== 0o700) fail('Каталог резервных копий должен иметь права 0700.');
-      const original = plan.backup?.record.original ?? (plan.current === null ? null : { base64: plan.current.bytes.toString('base64'), hash: plan.current.hash, mode: plan.current.mode });
-      // null is meaningful: reapplying must not turn an originally absent file
-      // into an original containing the previously written secret.
-      const record = { version: 1, agentId: plan.agent.id, rel: plan.rel, original: plan.backup ? plan.backup.record.original : original, state: 'pending', appliedHash: plan.backup?.record.appliedHash ?? plan.current?.hash ?? hash(Buffer.alloc(0)), nextHash: hash(plan.bytes) };
-      await replace(root, location, Buffer.from(json(record)), plan.backup?.saved ?? null);
-      await replace(root, plan.target, plan.bytes, plan.current);
-      const saved = await snapshot(root, location);
-      record.state = 'active'; record.appliedHash = record.nextHash; delete record.nextHash;
-      await replace(root, location, Buffer.from(json(record)), saved);
-      applied.push({ agentId: plan.agent.id, path: plan.target });
+      if (blocked.some(item => item.agentId === plan.agent.id)) continue;
+      try {
+        if (plan.cleanup) { await restorePlan(root, plan); applied.push({ agentId: plan.agent.id, path: plan.target }); continue; }
+        const location = backupPath(root, plan.target);
+        await directories(root, path.dirname(location), true);
+        if ((await fs.lstat(path.dirname(location))).mode % 512 !== 0o700) fail('Каталог резервных копий должен иметь права 0700.');
+        const original = plan.backup?.record.original ?? (plan.current === null ? null : { base64: plan.current.bytes.toString('base64'), hash: plan.current.hash, mode: plan.current.mode });
+        // null is meaningful: reapplying must not turn an originally absent file
+        // into an original containing the previously written secret.
+        const record = { version: 1, agentId: plan.agent.id, rel: plan.rel, original: plan.backup ? plan.backup.record.original : original, state: 'pending', appliedHash: plan.backup?.record.appliedHash ?? plan.current?.hash ?? hash(Buffer.alloc(0)), nextHash: hash(plan.bytes) };
+        if (plan.merge || plan.backup?.record.preserveEdits) record.preserveEdits = true;
+        await replace(root, location, Buffer.from(json(record)), plan.backup?.saved ?? null);
+        await replace(root, plan.target, plan.bytes, plan.current);
+        const saved = await snapshot(root, location);
+        record.state = 'active'; record.appliedHash = record.nextHash; delete record.nextHash;
+        await replace(root, location, Buffer.from(json(record)), saved);
+        applied.push({ agentId: plan.agent.id, path: plan.target });
+      } catch (error) {
+        // Each file is written on its own; one blocked agent keeps the others working.
+        blocked.push({ agentId: plan.agent.id, message: error instanceof Error ? error.message : 'Файл не изменён.' });
+      }
     }
-    return { applied, outcomes: agents.map(agent => ({ agentId: agent.id, modelCount: value.models.length, pickerVerified: false, nextStep: agent.id === 'codex' ? 'Откройте codex -p wikivibe, затем /model.' : `Откройте новую сессию и ${agent.id === 'opencode' ? '/models' : '/model'}.` })), warnings: warnings(agents) };
+    const appliedIds = new Set(applied.map(item => item.agentId));
+    return { applied, failures: blocked, outcomes: agents.filter(agent => appliedIds.has(agent.id) && !blocked.some(item => item.agentId === agent.id)).map(agent => ({ agentId: agent.id, modelCount: value.models.length, pickerVerified: false, nextStep: agent.id === 'codex' ? 'Откройте codex -p wikivibe, затем /model.' : `Откройте новую сессию и ${agent.id === 'opencode' ? '/models' : '/model'}.` })), warnings: warnings(agents) };
   });
 }
 export async function restoreAgents(agentIds, { home = homedir() } = {}) {
   const agents = selected(agentIds);
   return mutation(home, async root => {
-    const changes = await plans(root, agents, undefined, true);
+    const { plans: changes, failures } = await plans(root, agents, undefined, true);
     const restored = [];
+    const blocked = failures.slice();
     for (const plan of changes) {
-      await restorePlan(root, plan);
-      restored.push({ agentId: plan.agent.id, path: plan.target });
+      try { await restorePlan(root, plan); restored.push({ agentId: plan.agent.id, path: plan.target }); }
+      catch (error) { blocked.push({ agentId: plan.agent.id, message: error instanceof Error ? error.message : 'Файл не восстановлен.' }); }
     }
-    return { restored };
+    return { restored, failures: blocked };
   });
 }

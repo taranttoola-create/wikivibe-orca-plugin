@@ -1,5 +1,5 @@
 import { apiKey, endpoint, ENDPOINTS, REGISTRATION_URL, listModels, listAccount } from './client.mjs';
-import { listAgents, previewAgents, applyAgents, restoreAgents } from './adapters.mjs';
+import { listAgents, previewAgents, applyAgents, restoreAgents, syncManagedAgents } from './adapters.mjs';
 import { ConnectionError } from './connection-errors.mjs';
 
 export function createService(host, { home, fetchImpl = fetch, openRegistration } = {}) {
@@ -45,7 +45,8 @@ export function createService(host, { home, fetchImpl = fetch, openRegistration 
         }
         models = catalog;
         modelsBase = preferences.baseUrl;
-        return state();
+        const sync = await syncManagedAgents({ ...preferences, models: catalog, apiKey: credential }, options);
+        return { ...await state(), saved: true, sync };
       }
       case 'models': {
         const preferences = await config();
@@ -61,11 +62,13 @@ export function createService(host, { home, fetchImpl = fetch, openRegistration 
       }
       case 'preferences': {
         const selected = endpoint(body.baseUrl);
-        const catalog = await roster(selected, await key());
+        const credential = await key();
+        const catalog = await roster(selected, credential);
         await save({ baseUrl: selected });
         models = catalog;
         modelsBase = selected;
-        return state();
+        const sync = await syncManagedAgents({ baseUrl: selected, models: catalog, apiKey: credential }, options);
+        return { ...await state(), saved: true, sync };
       }
       case 'preview': {
         const preferences = await config();
