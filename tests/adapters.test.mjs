@@ -279,6 +279,30 @@ test('synchronizes existing OpenCode JSONC provider without changing routing, se
   assert.match(await get(root, '.config/opencode/opencode.jsonc'), /later edit/);
 });
 
+test('documented vision models declare image input without claiming unknown models', async () => {
+  const root = await home();
+  const roster = { ...value, models: [{ id: 'gpt-6.1-sol' }, { id: 'gpt-image-2.5' }, { id: 'deepseek-v4.1-flash' }] };
+  await applyAgents(['codex', 'opencode', 'omp', 'pi'], roster, { home: root });
+  const codex = JSON.parse(await get(root, '.codex/wikivibe-models.json')).models;
+  const bySlug = new Map(codex.map(row => [row.slug, row]));
+  assert.deepEqual(bySlug.get('gpt-6.1-sol').input_modalities, ['text', 'image']);
+  assert.deepEqual(bySlug.get('gpt-image-2.5').input_modalities, ['text', 'image']);
+  assert.deepEqual(bySlug.get('deepseek-v4.1-flash').input_modalities, ['text']);
+  const oc = JSON.parse(await get(root, '.config/opencode/opencode.json')).provider.wikivibe.models;
+  assert.deepEqual(oc['gpt-6.1-sol'].modalities, { input: ['text', 'image'], output: ['text'] });
+  assert.deepEqual(oc['gpt-image-2.5'].modalities, { input: ['text', 'image'], output: ['image'] });
+  assert.equal(oc['deepseek-v4.1-flash'].modalities, undefined);
+  const { parse } = await import('yaml');
+  const omp = new Map(parse(await get(root, '.omp/agent/models.yml')).providers.wikivibe.models.map(row => [row.id, row]));
+  assert.deepEqual(omp.get('gpt-6.1-sol').input, ['text', 'image']);
+  assert.deepEqual(omp.get('gpt-image-2.5').input, ['text', 'image']);
+  assert.equal(omp.get('deepseek-v4.1-flash').input, undefined);
+  const pi = JSON.parse(await get(root, '.pi/agent/models.json')).providers.wikivibe.models;
+  const piById = new Map(pi.map(row => [row.id, row]));
+  assert.deepEqual(piById.get('gpt-6.1-sol').input, ['text', 'image']);
+  assert.equal(piById.get('deepseek-v4.1-flash').input, undefined);
+});
+
 test('routes GPT through Responses and retains image models without pretending tool support', async () => {
   const root = await home();
   const roster = { ...value, models: [{ id: 'gpt-6.1-sol' }, { id: 'gpt-image-2.5' }, { id: 'glm-5.3-flash' }] };

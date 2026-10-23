@@ -32,6 +32,14 @@ const AGENTS = [
   { id: 'qwen', label: 'Qwen Code', rel: '.qwen/settings.json', protocol: 'OpenAI Chat Completions', description: 'В ~/.qwen/settings.json: все доступные modelProviders.openai с меткой WikiVibe и env.WIKIVIBE_API_KEY. WikiVibe — метка в группе протокола OpenAI, не отдельный тип auth. Текущие model.name/security.auth не меняются; при необходимости /auth, затем /model.' }
 ];
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+// Documented image-input support, checked 2026-10-23. Unknown IDs stay text-only.
+const VISION_MODELS = new Set([
+  'gpt-5.5', 'gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra',
+  'gpt-6-astra', 'gpt-6-luna', 'gpt-6-sol', 'gpt-6.1-sol',
+  'gemini-3.8-flash', 'gemini-3.1-flash-lite-preview', 'gemini-4-argon',
+  'glm-5.3-flash', 'gpt-image-2', 'gpt-image-2.5'
+]);
+const hasImageInput = id => VISION_MODELS.has(id) || id.startsWith('gpt-image-');
 const own = (object, key) => Object.hasOwn(object, key);
 const json = value => `${JSON.stringify(value, null, 2)}\n`;
 function fail(message) { throw new Error(message); }
@@ -106,7 +114,8 @@ function openCodeConfig(text, value) {
       ...entry?.models?.[model],
       name: entry?.models?.[model]?.name ?? model,
       provider: { npm: model.startsWith('gpt-') ? '@ai-sdk/openai' : '@ai-sdk/openai-compatible' },
-      ...(model.startsWith('gpt-image-') ? { tool_call: false, modalities: { input: ['text', 'image'], output: ['image'] } } : {})
+      ...(model.startsWith('gpt-image-') ? { tool_call: false, modalities: { input: ['text', 'image'], output: ['image'] } }
+        : hasImageInput(model) ? { modalities: { input: ['text', 'image'], output: ['text'] } } : {})
     }]));
     set(['provider', id], {
       ...entry,
@@ -138,6 +147,7 @@ function ompModels(text, value) {
     id: model,
     api: model.startsWith('gpt-') ? 'openai-responses' : 'openai-completions',
     kind: model.startsWith('gpt-image-') ? 'image' : 'chat',
+    ...(hasImageInput(model) ? { input: ['text', 'image'] } : {}),
     ...(model.startsWith('gpt-image-') ? { supportsTools: false } : {})
   }));
   let output = text;
@@ -299,7 +309,7 @@ function codexCatalog(models) {
     support_verbosity: false, default_verbosity: null, apply_patch_tool_type: null,
     supports_reasoning_summary_parameter: false, truncation_policy: { mode: 'bytes', limit: 10000 },
     supports_reasoning_summaries: false, supports_parallel_tool_calls: false,
-    experimental_supported_tools: [], input_modalities: ['text']
+    experimental_supported_tools: [], input_modalities: hasImageInput(id) ? ['text', 'image'] : ['text']
   })) };
 }
 function render(agent, rel, bytes, value, root, merge = false, providerId = 'wikivibe') {
@@ -360,7 +370,7 @@ function render(agent, rel, bytes, value, root, merge = false, providerId = 'wik
         const providers = child(config, 'providers');
         const existing = merge ? providers.wikivibe?.models : [];
         if (merge && existing !== undefined && !Array.isArray(existing)) fail('Pi: models должен быть массивом.');
-        provider(providers, 'wikivibe', { baseUrl: value.baseUrl, api: 'openai-completions', apiKey: value.apiKey, models: value.models.map(({ id }) => ({ ...existing?.find(row => row.id === id), id })) }, merge);
+        provider(providers, 'wikivibe', { baseUrl: value.baseUrl, api: 'openai-completions', apiKey: value.apiKey, models: value.models.map(({ id }) => ({ ...existing?.find(row => row.id === id), id, ...(hasImageInput(id) ? { input: ['text', 'image'] } : {}) })) }, merge);
       }
       break;
     case 'qwen': {
