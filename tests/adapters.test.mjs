@@ -189,6 +189,28 @@ test('OMP and Aider preserve YAML comments and unrelated values', async () => {
   assert.equal(await get(root, '.aider.conf.yml'), aider);
 });
 
+test('OMP declares documented reasoning levels and image input for an ID it cannot resolve', async () => {
+  const root = await home();
+  const input = { ...value, models: [{ id: 'kimi-k3.1-pro' }, { id: 'unlisted-model' }] };
+  await applyAgents(['omp', 'codex'], input, { home: root });
+  const text = await get(root, '.omp/agent/models.yml');
+  // oh-my-pi itself leaves an unrecognised model at reasoning:false, which
+  // disables the Shift+Tab level cycle; only documented shapes are written here.
+  assert.match(text, /"reasoning":true/);
+  assert.match(text, /"thinking":\{"mode":"effort","efforts":\["low","high","max"\],"defaultLevel":"max"\}/);
+  assert.match(text, /"kind":"chat","input":\["text","image"\],"reasoning":true/);
+  const catalog = JSON.parse(await get(root, '.codex/wikivibe-models.json'));
+  const kimi = catalog.models.find(model => model.slug === 'kimi-k3.1-pro');
+  assert.equal(kimi.default_reasoning_level, 'max');
+  assert.deepEqual(kimi.supported_reasoning_levels.map(level => level.effort), ['low', 'high', 'max']);
+  assert.deepEqual(kimi.input_modalities, ['text', 'image']);
+  // An undocumented ID keeps the conservative declaration instead of a guess.
+  const other = catalog.models.find(model => model.slug === 'unlisted-model');
+  assert.equal(other.default_reasoning_level, null);
+  assert.deepEqual(other.supported_reasoning_levels, []);
+  assert.doesNotMatch(text, /"id":"unlisted-model"[^}]*"reasoning"/);
+});
+
 test('Qwen settings preserves unrelated provider and restores after writing env key', async () => {
   const root = await home();
   const original = JSON.stringify({ modelProviders: { openai: [{ id: 'other', baseUrl: 'https://other.invalid' }], anthropic: [{ id: 'active' }] }, env: { KEEP: 'yes' }, model: { name: 'active' }, security: { auth: { selectedType: 'anthropic' } } }, null, 2) + '\n';

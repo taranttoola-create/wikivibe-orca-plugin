@@ -37,7 +37,7 @@ const VISION_MODELS = new Set([
   'gpt-5.5', 'gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra',
   'gpt-6-astra', 'gpt-6-luna', 'gpt-6-sol', 'gpt-6.1-sol',
   'gemini-3.8-flash', 'gemini-3.1-flash-lite-preview', 'gemini-4-argon',
-  'glm-5.3-flash', 'gpt-image-2', 'gpt-image-2.5'
+  'glm-5.3-flash', 'gpt-image-2', 'gpt-image-2.5', 'kimi-k3.1-pro'
 ]);
 const hasImageInput = id => VISION_MODELS.has(id) || id.startsWith('gpt-image-');
 const own = (object, key) => Object.hasOwn(object, key);
@@ -148,6 +148,9 @@ function ompModels(text, value) {
     api: model.startsWith('gpt-') ? 'openai-responses' : 'openai-completions',
     kind: model.startsWith('gpt-image-') ? 'image' : 'chat',
     ...(hasImageInput(model) ? { input: ['text', 'image'] } : {}),
+    // oh-my-pi resolves reasoning from its own catalog by model ID; an ID it does
+    // not know stays reasoning:false and Shift+Tab cannot change the level.
+    ...(ompThinking(model) ? { reasoning: true, thinking: ompThinking(model) } : {}),
     ...(model.startsWith('gpt-image-') ? { supportsTools: false } : {})
   }));
   let output = text;
@@ -298,12 +301,43 @@ function tomlConfig(text, value, merge = false) {
   return `${lines.join(newline)}${newline}`;
 }
 
+// Documented reasoning presets, checked 2026-10-24; /models carries no effort
+// metadata at all. Kimi K3: https://platform.moonshot.ai/docs/guide/use-kimi-k3
+// (efforts low/high/max, max by default). IDs outside this table declare nothing:
+// oh-my-pi still resolves the models its own catalog knows, and Codex shows no
+// levels rather than a guess.
+const EFFORT_DESCRIPTIONS = {
+  none: 'Disable reasoning',
+  minimal: 'Minimal reasoning; not guaranteed to be off',
+  low: 'Fast responses with lighter reasoning',
+  medium: 'Balances speed and reasoning depth for everyday tasks',
+  high: 'Greater reasoning depth for complex problems',
+  xhigh: 'Extra high reasoning depth for complex problems',
+  max: 'Maximum reasoning depth for the hardest problems',
+  ultra: 'Maximum reasoning with automatic task delegation'
+};
+const REASONING_LEVELS = new Map([
+  ['kimi-k3.1-pro', ['max', ['low', 'high', 'max']]]
+]);
+// oh-my-pi validates this shape strictly: an effort outside its own vocabulary
+// disables every custom provider in the file, so both the list and the default
+// level are narrowed to what it accepts.
+const OMP_EFFORTS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
+function ompThinking(id) {
+  const preset = REASONING_LEVELS.get(id);
+  if (!preset) return null;
+  const efforts = preset[1].filter(effort => OMP_EFFORTS.has(effort));
+  if (!efforts.length) return null;
+  return { mode: 'effort', efforts, ...(efforts.includes(preset[0]) ? { defaultLevel: preset[0] } : {}) };
+}
 // Required Codex ModelInfo fields are client metadata, not gateway capabilities.
 // Do not fabricate reasoning, image support, prices or context limits from an ID.
 function codexCatalog(models) {
   return { models: models.map(({ id }, priority) => ({
     slug: id, display_name: `WikiVibe · ${id}`, description: 'WikiVibe; совместимость Responses и инструментов не проверена.',
-    default_reasoning_level: null, supported_reasoning_levels: [], shell_type: 'shell_command',
+    default_reasoning_level: REASONING_LEVELS.get(id)?.[0] ?? null,
+    supported_reasoning_levels: (REASONING_LEVELS.get(id)?.[1] ?? []).map(effort => ({ effort, description: EFFORT_DESCRIPTIONS[effort] })),
+    shell_type: 'shell_command',
     visibility: 'list', supported_in_api: true, priority, availability_nux: null, upgrade: null,
     base_instructions: 'You are a coding assistant running in Codex. Follow the user request and repository instructions, use the available tools to complete the task, preserve unrelated user changes, and report the changes and actual verification performed.',
     support_verbosity: false, default_verbosity: null, apply_patch_tool_type: null,
