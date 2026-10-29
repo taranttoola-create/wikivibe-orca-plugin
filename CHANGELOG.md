@@ -2,6 +2,9 @@
 
 ## Не выпущено
 
+- Codex, Claude Code, OpenCode and Qwen Code omit the upstream provider prefix (for example, `vendor/`) from visible model names; full IDs remain the routing and selection values. Prefix removal is derived from each ID, not a fixed model list, so newly added models follow the same display rule.
+- The desktop app and native adapter catalogs show the model portion without `ali/`-style provider prefixes while preserving the full ID in model routes and requests.
+- Regression tests cover provider-prefixed and unprefixed names across the generated client catalogs.
 - Codex-каталог теперь объявляет image input для документированных vision-моделей; раньше все модели были text-only, из-за чего Codex 0.153 отклонял `view_image` и вложения. Неизвестные ID остаются text-only.
 - OpenCode, OMP и Pi получают image input для тех же моделей; image-модели сохраняют output image, `kind: image` и отсутствие tools. Встроенный `image_gen` Codex для custom provider WikiVibe по-прежнему недоступен: Codex 0.153 открывает его только для OpenAI/ChatGPT auth или actor authorization.
 - Сохранены шесть оригинальных изображений из OMP-сессии в `assets/`. README получил баннер и галерею с явным отличием концепт-арта от реального интерфейса. Упаковка включает изображения, чтобы относительные ссылки README оставались рабочими.

@@ -101,6 +101,28 @@ test('Claude JSON preserves unrelated fields and restores original bytes and mod
   assert.equal((await lstat(file)).mode & 0o777, 0o640);
 });
 
+test('provider prefixes remain in route IDs but are omitted from client-facing names', async () => {
+  const root = await home();
+  const result = await applyAgents(['claude', 'codex', 'opencode', 'qwen'], value, { home: root });
+  assert.deepEqual(result.failures, []);
+
+  const catalog = JSON.parse(await get(root, '.codex/wikivibe-models.json'));
+  assert.equal(catalog.models[1].slug, 'vendor/wv-code-2');
+  assert.equal(catalog.models[1].display_name, 'WikiVibe · wv-code-2');
+
+  const claude = JSON.parse(await get(root, '.claude/settings.json'));
+  assert.deepEqual(claude.modelPicker.options.find(row => row.model === 'vendor/wv-code-2'), { model: 'vendor/wv-code-2', label: 'WikiVibe · wv-code-2' });
+
+  const opencode = JSON.parse(await get(root, '.config/opencode/opencode.json'));
+  assert.equal(opencode.provider.wikivibe.models['vendor/wv-code-2'].name, 'wv-code-2');
+
+  const qwen = JSON.parse(await get(root, '.qwen/settings.json'));
+  assert.deepEqual(qwen.modelProviders.openai.map(({ id, name }) => ({ id, name })), [
+    { id: 'wv-code-1', name: 'WikiVibe · wv-code-1' },
+    { id: 'vendor/wv-code-2', name: 'WikiVibe · wv-code-2' }
+  ]);
+});
+
 test('Codex TOML preserves unrelated settings and writes documented responses provider', async () => {
   const root = await home();
   const original = '# user setting\nmodel = "existing"\nmodel_provider = "openai"\nmodel_catalog_json = "/user/catalog.json"\napproval_policy = "on-request"\n';

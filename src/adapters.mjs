@@ -99,6 +99,11 @@ function parseOpenCode(text) {
   if (errors.length || !object(config)) fail('OpenCode: некорректный JSON/JSONC; файл не изменён.');
   return config;
 }
+function displayModelID(id) {
+  const slash = id.indexOf('/');
+  return slash > 0 && slash < id.length - 1 ? id.slice(slash + 1) : id;
+}
+
 function openCodeConfig(text, value) {
   const config = parseOpenCode(text);
   const providers = child(config, 'provider');
@@ -110,13 +115,16 @@ function openCodeConfig(text, value) {
   const set = (keys, setting) => { output = applyEdits(output, modify(output, keys, setting, { formattingOptions })); };
   for (const [id, entry] of routes) {
     if (entry && !object(entry.models ?? {})) fail('OpenCode: models должен быть объектом.');
-    const models = Object.fromEntries(value.models.map(({ id: model }) => [model, {
-      ...entry?.models?.[model],
-      name: entry?.models?.[model]?.name ?? model,
-      provider: { npm: model.startsWith('gpt-') ? '@ai-sdk/openai' : '@ai-sdk/openai-compatible' },
-      ...(model.startsWith('gpt-image-') ? { tool_call: false, modalities: { input: ['text', 'image'], output: ['image'] } }
-        : hasImageInput(model) ? { modalities: { input: ['text', 'image'], output: ['text'] } } : {})
-    }]));
+    const models = Object.fromEntries(value.models.map(({ id: model }) => {
+      const previous = entry?.models?.[model] ?? {};
+      return [model, {
+        ...previous,
+        name: previous.name === model ? displayModelID(model) : (previous.name ?? displayModelID(model)),
+        provider: { npm: model.startsWith('gpt-') ? '@ai-sdk/openai' : '@ai-sdk/openai-compatible' },
+        ...(model.startsWith('gpt-image-') ? { tool_call: false, modalities: { input: ['text', 'image'], output: ['image'] } }
+          : hasImageInput(model) ? { modalities: { input: ['text', 'image'], output: ['text'] } } : {})
+      }];
+    }));
     set(['provider', id], {
       ...entry,
       npm: '@ai-sdk/openai-compatible',
@@ -334,7 +342,7 @@ function ompThinking(id) {
 // Do not fabricate reasoning, image support, prices or context limits from an ID.
 function codexCatalog(models) {
   return { models: models.map(({ id }, priority) => ({
-    slug: id, display_name: `WikiVibe · ${id}`, description: 'WikiVibe; совместимость Responses и инструментов не проверена.',
+    slug: id, display_name: `WikiVibe · ${displayModelID(id)}`, description: 'WikiVibe; совместимость Responses и инструментов не проверена.',
     default_reasoning_level: REASONING_LEVELS.get(id)?.[0] ?? null,
     supported_reasoning_levels: (REASONING_LEVELS.get(id)?.[1] ?? []).map(effort => ({ effort, description: EFFORT_DESCRIPTIONS[effort] })),
     shell_type: 'shell_command',
@@ -390,7 +398,7 @@ function render(agent, rel, bytes, value, root, merge = false, providerId = 'wik
       // Merge keeps the user's own picker rows and replaces only plugin-labelled ones.
       const options = (picker.options ?? []).filter(row => !(merge && typeof row.label === 'string' && row.label.startsWith('WikiVibe · ')));
       if (options.some(row => value.models.some(model => model.id === row.model))) fail('Claude Code: модель уже существует в пользовательском modelPicker.');
-      picker.options = [...options, ...value.models.map(({ id }) => ({ model: id, label: `WikiVibe · ${id}` }))];
+      picker.options = [...options, ...value.models.map(({ id }) => ({ model: id, label: `WikiVibe · ${displayModelID(id)}` }))];
       picker.replaceBuiltInOptions = true;
       expandAllowlist(config, 'availableModels', value.models.map(({ id }) => id));
       env.ANTHROPIC_BASE_URL = value.baseUrl.slice(0, -3);
@@ -415,7 +423,7 @@ function render(agent, rel, bytes, value, root, merge = false, providerId = 'wik
       const kept = merge ? providers.openai.filter(entry => entry.envKey !== 'WIKIVIBE_API_KEY') : providers.openai;
       if (kept.some(entry => entry.envKey === 'WIKIVIBE_API_KEY' || value.models.some(model => model.id === entry.id))) fail('Qwen Code: идентификатор модели или ключ уже используется другим поставщиком.');
       const previous = merge ? providers.openai.filter(entry => entry.envKey === 'WIKIVIBE_API_KEY') : [];
-      providers.openai = [...kept, ...value.models.map(({ id }) => ({ ...previous.find(entry => entry.id === id), id, name: `WikiVibe · ${id}`, baseUrl: value.baseUrl, envKey: 'WIKIVIBE_API_KEY' }))];
+      providers.openai = [...kept, ...value.models.map(({ id }) => ({ ...previous.find(entry => entry.id === id), id, name: `WikiVibe · ${displayModelID(id)}`, baseUrl: value.baseUrl, envKey: 'WIKIVIBE_API_KEY' }))];
       const env = child(config, 'env');
       if (own(env, 'WIKIVIBE_API_KEY') && !merge) fail('Qwen Code: переменная WIKIVIBE_API_KEY уже существует.');
       env.WIKIVIBE_API_KEY = value.apiKey;
